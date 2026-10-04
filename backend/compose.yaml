@@ -3,9 +3,12 @@ services:
     image: sandbox-api:local
     platform: linux/amd64
     init: true
+    # アプリの書き換えを防ぎ、書き込み先を /tmp に限定する。
     read_only: true
     tmpfs:
       - /tmp
+    # 不要な Linux capability とプロセスの権限昇格を禁止する。
+    # この制限は Compose 実行時のみで、Lambda へは自動適用されない。
     cap_drop:
       - ALL
     security_opt:

@@ -109,14 +109,10 @@ docker compose up --no-build
 
 ビルド環境を分離し、通常のコンテナ実行は非 root に制限します。
 
-- builder: uv で実行時依存の仮想環境を作成。
-- runtime: Python ベースに仮想環境、アプリ、Web Adapter のみを追加。uv・lockfile・テスト依存はコピーしません。
-- ユーザー: UID / GID `10001`。アプリのファイルは root 所有で、実行ユーザーから書き換えません。
-- Compose: 読み取り専用、`/tmp` のみ書き込み可能、全 capability を削除、権限昇格を禁止。
-- Lambda: プラットフォームが実行ユーザーを設定するため、AWS 上の権限と読み取り可能性はデプロイ時に確認する対象です。
-- 適用範囲: Compose の制限は Dockerfile 自体や Lambda の設定へ自動的には引き継がれません。
-
-これらは権限と同梱物を減らす対策です。ベースイメージの脆弱性がないことを保証するものではなく、digest の更新と脆弱性検査は別途必要です。
+- 実行イメージには実行時に必要な依存だけを追加。
+- ローカル実行は非 root・読み取り専用とし、権限昇格を禁止。
+- 実装詳細は [Dockerfile](Dockerfile) と [Compose 設定](compose.yaml) のコメントを参照。
+- AWS 上の実行権限と脆弱性検査は未検証。
 
 ## 構造化ログ
 
@@ -128,12 +124,12 @@ Powertools の Logger で、リクエスト完了・例外を JSON として標�
 - `method` / `path`: HTTP メソッドとパス。
 - `status_code`: HTTP ステータス。
 - `duration_ms`: 処理時間（ミリ秒）。
-- `correlation_id`: Lambda の呼び出し ID。ローカルでは生成した UUID。
-- `lambda_request_id`: Lambda の呼び出し ID。ローカルではフィールドを省略。
-- `request_id_source`: `lambda` / `local` / `unavailable`。
+- `correlation_id`: 取得できた Lambda の呼び出し ID。取得できない場合は生成 UUID。
+- `lambda_request_id`: Lambda の呼び出し ID。生成 UUID を使う場合はフィールドを省略。
+- `request_id_source`: `lambda` / `generated`。
 - `X-Request-Id`: レスポンス開始を取得できる場合、同じ ID を付与。
 - Lambda の ID: Web Adapter が渡す `x-amzn-lambda-context` の `request_id` を取得。
-- readiness probe・コンテキスト不正: Lambda 内では ID を生成せず ID フィールドを省略（Powertools は `None` の値を除去）。
+- readiness probe・コンテキスト欠落や不正: UUID を生成し、出所を `generated` として記録。
 - 未処理例外の 500: 外側の FastAPI がレスポンスを生成するため、ID ヘッダーは付与されません。ログで追跡します。
 - 例外: ERROR レベルで例外名とスタックトレースを記録し、例外を再送出。
 

@@ -11,7 +11,7 @@ async function capture(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(name, { path, contentType: 'image/png' });
 }
 
-test('React calls the real FastAPI from a different origin', async ({ page }, testInfo) => {
+test('React から別 Origin の実 API を呼び出して結果を表示する', async ({ page }, testInfo) => {
   await page.goto('/');
   await capture(page, testInfo, '01-initial');
   await expect(page.getByRole('heading', { name: 'Hello World' })).toBeVisible();
@@ -26,7 +26,7 @@ test('React calls the real FastAPI from a different origin', async ({ page }, te
   await capture(page, testInfo, 'success');
 });
 
-test('React displays a connection failure and allows retry', async ({ page }, testInfo) => {
+test('React で通信失敗を表示し、回復後に再試行できる', async ({ page }, testInfo) => {
   await page.route('http://localhost:8000/hello', route => route.abort('connectionfailed'));
   await page.goto('/');
   await capture(page, testInfo, '01-initial');

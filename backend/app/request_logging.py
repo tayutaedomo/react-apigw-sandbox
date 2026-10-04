@@ -1,7 +1,6 @@
 """HTTP の処理結果を記録し、Lambda またはローカルの ID で追跡する。"""
 
 import json
-import os
 from time import perf_counter
 from uuid import UUID, uuid4
 
@@ -13,16 +12,14 @@ from app.server import get_log_level
 logger = Logger(service="sandbox-api", utc=True, use_rfc3339=True, level=get_log_level())
 
 
-def request_id(scope: Scope) -> tuple[str | None, str]:
-    """Lambda では Adapter の request_id、ローカルでは UUID を返す。
+def request_id(scope: Scope) -> tuple[str, str]:
+    """Adapter の request_id を優先し、取得できなければ UUID を生成する。
 
-    Lambda の readiness probe には呼び出しコンテキストがないため、ID は
-    None とする。壊れたコンテキストでも API を失敗させず、生成 ID で
-    Lambda の ID を代用しない。ローカルでは外部からのコンテキストを信用しない。
+    ローカル実行・readiness probe・コンテキスト不正を同じフォールバックで扱う。
+    生成 ID は Lambda 呼び出し ID とは区別し、ログに出所を記録する。
+    Lambda では Adapter が同名ヘッダーを上書きする。直接公開したローカル API
+    のヘッダーは呼び出し元が指定できるため、ID を認証や信頼の判断には使わない。
     """
-    if not os.environ.get("AWS_LAMBDA_RUNTIME_API"):
-        return str(uuid4()), "local"
-
     # Web Adapter がクライアントの同名ヘッダーを上書きして渡す JSON を読む。
     raw = next((value for name, value in scope["headers"]
                 if name.lower() == b"x-amzn-lambda-context"), None)
@@ -31,11 +28,12 @@ def request_id(scope: Scope) -> tuple[str | None, str]:
         value = context.get("request_id")
         if isinstance(value, str):
             # UUID 検証により、レスポンスヘッダーに制御文字を持ち込ませない。
-            UUID(value)
-            return value, "lambda"
+            parsed = UUID(value)
+            if value == str(parsed):
+                return value, "lambda"
     except (ValueError, TypeError, AttributeError, UnicodeDecodeError):
         pass
-    return None, "unavailable"
+    return str(uuid4()), "generated"
 
 
 class RequestLoggingMiddleware:
@@ -62,14 +60,13 @@ class RequestLoggingMiddleware:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
-                if correlation_id is not None:
-                    message = {
-                        **message,
-                        "headers": [
-                            *message.get("headers", []),
-                            (b"x-request-id", correlation_id.encode("ascii")),
-                        ],
-                    }
+                message = {
+                    **message,
+                    "headers": [
+                        *message.get("headers", []),
+                        (b"x-request-id", correlation_id.encode("ascii")),
+                    ],
+                }
             await send(message)
 
         def fields() -> dict:

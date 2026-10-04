@@ -5,12 +5,12 @@
 検証とは区別する。ログは StringIO に隔離して、並行処理の混同と秘密の漏洩も確認する。
 
 ケース:
-- 正常終了: ステータス・処理時間・ローカル UUID、クエリ・認証情報の非記録。
+- 正常終了: ステータス・処理時間・生成 UUID、クエリ・認証情報の非記録。
 - 405: 実際のステータスの記録、リクエスト本文の非記録。
 - 未処理例外: ERROR とスタックトレースの記録、500 の維持。
 - 並行処理: リクエストごとの ID とステータスが一致。
-- Lambda: 呼び出し ID の継承、コンテキスト欠落・破損時の継続。
-- ローカル: クライアントが送った Lambda コンテキストを信用しない。
+- Lambda: 呼び出し ID の継承、コンテキスト欠落・破損時の UUID フォールバック。
+- 環境への非依存: ローカルでも有効なコンテキストの ID を利用。
 """
 
 import asyncio
@@ -144,27 +144,27 @@ def test_lambda_request_id_matches_log_and_response(log_stream, monkeypatch):
 
 
 @pytest.mark.parametrize("context", [None, "not-json", "[]", '{"request_id":"invalid"}'])
-def test_lambda_without_valid_context_does_not_invent_id(log_stream, monkeypatch, context):
+def test_invalid_context_falls_back_to_generated_id(log_stream, monkeypatch, context):
     monkeypatch.setenv("AWS_LAMBDA_RUNTIME_API", "localhost:9001")
     headers = {"x-amzn-lambda-context": context} if context is not None else {}
     with TestClient(app) as client:
         response = client.get("/hello", headers=headers)
     [record] = read_logs(log_stream)
     assert response.status_code == 200
-    assert "x-request-id" not in response.headers
-    assert "correlation_id" not in record
+    assert record["correlation_id"] == response.headers["x-request-id"]
+    UUID(record["correlation_id"])
     assert "lambda_request_id" not in record
-    assert record["request_id_source"] == "unavailable"
+    assert record["request_id_source"] == "generated"
 
 
-def test_local_request_ignores_client_lambda_context(log_stream):
+def test_valid_context_is_used_without_runtime_environment(log_stream):
     supplied_id = str(uuid4())
     with TestClient(app) as client:
         response = client.get("/hello", headers={
             "x-amzn-lambda-context": json.dumps({"request_id": supplied_id})
         })
     [record] = read_logs(log_stream)
-    assert record["request_id_source"] == "local"
-    assert record["correlation_id"] != supplied_id
+    assert record["request_id_source"] == "lambda"
+    assert record["correlation_id"] == supplied_id
     assert record["correlation_id"] == response.headers["x-request-id"]
     UUID(record["correlation_id"])
