@@ -76,4 +76,3 @@ Lambda 上の Web Adapter を経由し、React から Hello World を取得で�
 ## 未検証の範囲
 
 Gateway 自身のエラー時 CORS、広範囲の障害、Amplify 上のブラウザー疎通は未検証です。
-
