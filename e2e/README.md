@@ -58,6 +58,25 @@ npm test
 npm test -- --headed
 ```
 
+### コンテナを使ったテスト
+
+コンテナ内の API を使って、同じ疎通・再試行テストを実行できます。
+
+1. [backend の手順](../backend/README.md#イメージのビルド)で `sandbox-api:local` をビルドします。
+2. 手動起動した frontend・backend・API コンテナを停止します。
+3. `e2e/` 内で実行します。
+
+```sh
+npm run test:container
+```
+
+- 前提: Docker が稼働し、既定タグのイメージがローカルに存在。
+- API: Playwright が `backend/compose.yaml` を使って自動起動。
+- frontend: 通常のテストと同じ開発サーバーを自動起動。
+- ポート: ホストの `8000` をコンテナの `8080` に接続。
+- 終了: 起動したサーバーとコンテナを停止・削除。
+- 検証範囲: ブラウザーからコンテナ内の API への通信。AWS 上の Lambda 実行は含みません。
+
 ### テストを指定して実行
 
 ```sh
@@ -69,8 +88,27 @@ npm test -- tests/hello.spec.ts
 ### ファイルの役割
 
 - `playwright.config.ts`: Chromium、サーバーの起動方法、接続先を定義。
+- `playwright.container.config.ts`: API の起動を Docker に切り替え。
+- `scripts/run-api-container.sh`: コンテナを起動し、終了・中断時に削除。
 - `tests/hello.spec.ts`: 疎通と通信失敗・再試行のテスト。
 - `test-results/`: テストの出力。Git 管理の対象外。
+
+### 画面キャプチャと HTML レポート
+
+成功時も画面を保存します。HTML レポートの添付画像で操作前後を確認できます。
+
+- 操作の節目: 初期表示、API 成功、通信失敗、再試行成功で全画面 PNG を保存。
+- テスト終了時: Playwright の `screenshot: 'on'` で成功・失敗とも自動保存。
+- PNG: `test-results/` 内のテスト別ディレクトリ。
+- HTML レポート: `playwright-report/`。画面キャプチャを添付。
+- 保存先: 通常・コンテナの実行で共通。次の実行時に前の結果を上書きします。
+- Git: 実行結果は管理対象外。
+
+```sh
+npm exec -- playwright show-report
+```
+
+節目の画像で表示の変化を比較し、失敗時は以下のトレースで通信や操作も調べます。
 
 ### トレース
 
@@ -88,4 +126,5 @@ npm exec -- playwright show-trace 'test-results/<テストの出力ディレク�
 - 事前準備: frontend と backend の依存をセットアップ。
 - セットアップ: `npm ci` と `npm run browser:install`。
 - 検証: 手動サーバーを停止し、`npm test`。
+- コンテナ検証: イメージをビルドし、`npm run test:container`。
 - 画面確認: `npm test -- --headed`。

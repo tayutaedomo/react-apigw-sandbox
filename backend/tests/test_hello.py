@@ -1,3 +1,9 @@
+"""Hello World API の概要・方針・ケース一覧。
+
+方針: TestClient で HTTP レスポンスを確認する。ブラウザーの CORS 判定は E2E で確認。
+ケース: 正常な JSON、許可 Origin の CORS、未許可 Origin と credentials の不許可。
+"""
+
 from fastapi.testclient import TestClient
 
 from app.main import app

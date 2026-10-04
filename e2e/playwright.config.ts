@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
+    screenshot: 'on',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
