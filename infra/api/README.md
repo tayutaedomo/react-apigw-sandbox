@@ -6,6 +6,7 @@ API Gateway REST API から、コンテナ方式の Lambda 上の FastAPI を呼
 
 - ECR: [専用ディレクトリ](../ecr/README.md)で作成済みの repository を参照。
 - state: ECR と独立したローカル state。
+- リソース定義: [main.tf](main.tf)に実行環境・権限・Lambda・Gateway・公開ステージをセクション別に配置。
 - イメージ: タグではなく digest URI を指定。
 - Lambda: `x86_64`、512 MB、タイムアウト15秒。
 - 統合: Lambda proxy。ルートと配下のパスを FastAPI へ渡す。
@@ -118,4 +119,3 @@ aws logs tail '/aws/lambda/react-apigw-sandbox-api' --since 10m
 
 - API 側だけを削除する場合: この state に digest を渡し `terraform destroy -var="image_uri=$(cat image-uri.txt)"`。
 - ECR とイメージ: API 側の destroy では削除されない。
-- 学習の区切り: 作成・疎通・ログを確認し、次の機能は別 PR で追加。

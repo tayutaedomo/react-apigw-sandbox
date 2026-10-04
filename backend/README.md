@@ -114,7 +114,7 @@ docker compose up --no-build
 - 実行イメージには実行時に必要な依存だけを追加。
 - ローカル実行は非 root・読み取り専用とし、権限昇格を禁止。
 - 実装詳細は [Dockerfile](Dockerfile) と [Compose 設定](compose.yaml) のコメントを参照。
-- Lambda 上でもアプリと Web Adapter の実行を確認済み。初回の ECR スキャン結果は [ルート README](../README.md#ecr-とイメージの登録)を参照。
+- Lambda 上でもアプリと Web Adapter の実行を確認済み。初回の ECR スキャン結果は [PoC の検証結果](../docs/poc.md#ecr-とイメージの登録)を参照。
 
 ## ECR への push
 
