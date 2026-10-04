@@ -2,10 +2,11 @@
 
 方針: CLI を一時的なスタブへ置き換え、AWS を変更せず入力検証と失敗時の
 認証設定削除を確認する。実際の ECR 転送は AWS 上の疎通確認で扱う。
-ケース: 不正タグの拒否、arm64 の拒否、push 失敗時の cleanup、成功時の digest URI。
+ケース: 不正タグの拒否、arm64 の拒否、push 失敗時の cleanup、成功時の digest URI、タグ自動発番。
 """
 
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -31,7 +32,9 @@ if name == "terraform":
 elif name == "aws":
     print("dummy-token" if "get-login-password" in args else "sha256:" + "a" * 64)
 elif name == "docker":
-    if "inspect" in args:
+    if "tag" in args:
+        Path(os.environ["TEST_CONFIG_PATH"] + ".destination").write_text(args[-1])
+    elif "inspect" in args:
         print(os.environ.get("TEST_PLATFORM", "linux/amd64"))
     elif "--config" in args:
         config = Path(args[args.index("--config") + 1])
@@ -80,5 +83,14 @@ def test_authentication_directory_is_removed_on_success_and_failure(cli_environm
     assert not auth_directory.exists()
     assert result.returncode == (1 if fails else 0)
     if not fails:
-        assert result.stdout.strip().endswith("test-api@sha256:" + "a" * 64)
+        assert result.stdout.strip() == "123456789012.dkr.ecr.us-east-1.amazonaws.com/test-api@sha256:" + "a" * 64
     assert "dummy-token" not in result.stdout + result.stderr
+
+
+def test_tag_is_generated_when_omitted(cli_environment):
+    result = subprocess.run(["bash", str(SCRIPT)], env=cli_environment,
+                            capture_output=True, text=True)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "123456789012.dkr.ecr.us-east-1.amazonaws.com/test-api@sha256:" + "a" * 64
+    destination = Path(cli_environment["TEST_CONFIG_PATH"] + ".destination").read_text()
+    assert re.fullmatch(r"123456789012\.dkr\.ecr\.us-east-1\.amazonaws\.com/test-api:git-[a-f0-9]+-[0-9]{8}T[0-9]{6}Z-[0-9]+", destination)

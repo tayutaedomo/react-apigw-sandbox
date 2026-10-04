@@ -5,7 +5,8 @@
 リソースの作成順序に合わせて Terraform の作業ディレクトリと state を分離します。
 
 - [ecr](ecr/README.md): API イメージの保存先を作成。
-- Lambda・API Gateway・Amplify: 未追加。ECR と別の state で管理する対象。
+- [api](api/README.md): Lambda・API Gateway REST API・実行 role・ログを作成。
+- Amplify: 未追加。API と独立して配信を管理する対象。
 - Docker のビルド・push: [backend](../backend/README.md) の独立スクリプトで実行。
 - Amplify への配信: Terraform に含めず、手動デプロイを使用する方針。
 

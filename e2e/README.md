@@ -77,6 +77,21 @@ npm run test:container
 - 終了: 起動したサーバーとコンテナを停止・削除。
 - 検証範囲: ブラウザーからコンテナ内の API への通信。AWS 上の Lambda 実行は含みません。
 
+### AWS 上の API を使ったテスト
+
+ローカル frontend から、作成済みの API Gateway REST API を呼び出します。
+
+```sh
+AWS_API_BASE_URL="$(terraform -chdir=../infra/api output -raw api_base_url)" npm run test:aws
+```
+
+- 前提: [API の Terraform](../infra/api/README.md)を適用済み。
+- 起動: frontend のみ。API URL は環境変数で渡し、実 URL をソースに保存しません。
+- サーバー: ローカル backend は起動しません。
+- ケース: 既存の疎通・再試行に加え、HTTP レスポンスの呼び出し ID を確認。
+- ローカルモード: AWS 専用ケースは skip。
+- 実行結果: 通常モードと同じ場所へ保存するため、前回のレポートを上書きします。
+
 ### テストを指定して実行
 
 ```sh
@@ -89,6 +104,7 @@ npm test -- tests/hello.spec.ts
 
 - `playwright.config.ts`: Chromium、サーバーの起動方法、接続先を定義。
 - `playwright.container.config.ts`: API の起動を Docker に切り替え。
+- `playwright.aws.config.ts`: API を AWS endpoint に切り替え、frontend のみ起動。
 - `scripts/run-api-container.sh`: コンテナを起動し、終了・中断時に削除。
 - `tests/hello.spec.ts`: 疎通と通信失敗・再試行のテスト。
 - `test-results/`: テストの出力。Git 管理の対象外。

@@ -1,9 +1,12 @@
 /**
  * 概要: 実 API に対する React の表示と再試行をブラウザーで確認する。
  * 方針: UI と HTTP 応答を検証し、操作の節目を PNG としてレポートへ添付する。
- * ケース: 別 Origin の API 呼び出し成功、通信失敗の表示と回復後の再試行。
+ * ケース: 別 Origin の API 呼び出し成功、通信失敗の表示と回復後の再試行、AWS の呼び出し ID。
  */
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+
+const apiBaseUrl = (process.env.AWS_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+const helloUrl = `${apiBaseUrl}/hello`;
 
 async function capture(page: Page, testInfo: TestInfo, name: string) {
   const path = testInfo.outputPath(`${name}.png`);
@@ -16,7 +19,7 @@ test('React から別 Origin の実 API を呼び出して結果を表示する'
   await capture(page, testInfo, '01-initial');
   await expect(page.getByRole('heading', { name: 'Hello World' })).toBeVisible();
 
-  const responsePromise = page.waitForResponse('http://localhost:8000/hello');
+  const responsePromise = page.waitForResponse(helloUrl);
   await page.getByRole('button', { name: 'API を呼び出す' }).click();
   const response = await responsePromise;
 
@@ -27,7 +30,7 @@ test('React から別 Origin の実 API を呼び出して結果を表示する'
 });
 
 test('React で通信失敗を表示し、回復後に再試行できる', async ({ page }, testInfo) => {
-  await page.route('http://localhost:8000/hello', route => route.abort('connectionfailed'));
+  await page.route(helloUrl, route => route.abort('connectionfailed'));
   await page.goto('/');
   await capture(page, testInfo, '01-initial');
   await page.getByRole('button', { name: 'API を呼び出す' }).click();
@@ -35,9 +38,18 @@ test('React で通信失敗を表示し、回復後に再試行できる', async
   await expect(page.getByRole('button', { name: 'API を呼び出す' })).toBeEnabled();
   await capture(page, testInfo, '02-connection-failed');
 
-  await page.unroute('http://localhost:8000/hello');
+  await page.unroute(helloUrl);
   await page.getByRole('button', { name: 'API を呼び出す' }).click();
   await expect(page.getByText('API: Hello World', { exact: true })).toBeVisible();
   await capture(page, testInfo, 'success');
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('AWS の Lambda 呼び出し ID をレスポンスから取得できる', async ({ request }) => {
+  test.skip(!process.env.AWS_API_BASE_URL, 'AWS モードでのみ検証する');
+  const response = await request.get(helloUrl, { headers: { Origin: 'http://localhost:5173' } });
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toEqual({ message: 'Hello World' });
+  expect(response.headers()['x-request-id']).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
+  expect(response.headers()['access-control-allow-origin']).toBe('http://localhost:5173');
 });
