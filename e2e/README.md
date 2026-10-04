@@ -58,6 +58,25 @@ npm test
 npm test -- --headed
 ```
 
+### コンテナを使ったテスト
+
+コンテナ内の API を使って、同じ疎通・再試行テストを実行できます。
+
+1. [backend の手順](../backend/README.md#イメージのビルド)で `sandbox-api:local` をビルドします。
+2. 手動起動した frontend・backend・API コンテナを停止します。
+3. `e2e/` 内で実行します。
+
+```sh
+npm run test:container
+```
+
+- 前提: Docker が稼働し、既定タグのイメージがローカルに存在。
+- API: Playwright が `docker run` で自動起動。
+- frontend: 通常のテストと同じ開発サーバーを自動起動。
+- ポート: ホストの `8000` をコンテナの `8080` に接続。
+- 終了: 起動したサーバーとコンテナを停止・削除。
+- 検証範囲: ブラウザーからコンテナ内の API への通信。AWS 上の Lambda 実行は含みません。
+
 ### テストを指定して実行
 
 ```sh
@@ -69,6 +88,8 @@ npm test -- tests/hello.spec.ts
 ### ファイルの役割
 
 - `playwright.config.ts`: Chromium、サーバーの起動方法、接続先を定義。
+- `playwright.container.config.ts`: API の起動を Docker に切り替え。
+- `scripts/run-api-container.sh`: コンテナを起動し、終了・中断時に削除。
 - `tests/hello.spec.ts`: 疎通と通信失敗・再試行のテスト。
 - `test-results/`: テストの出力。Git 管理の対象外。
 
@@ -88,4 +109,5 @@ npm exec -- playwright show-trace 'test-results/<テストの出力ディレク�
 - 事前準備: frontend と backend の依存をセットアップ。
 - セットアップ: `npm ci` と `npm run browser:install`。
 - 検証: 手動サーバーを停止し、`npm test`。
+- コンテナ検証: イメージをビルドし、`npm run test:container`。
 - 画面確認: `npm test -- --headed`。
