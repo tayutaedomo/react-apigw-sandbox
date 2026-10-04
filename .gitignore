@@ -11,3 +11,11 @@ __pycache__/
 playwright-report/
 test-results/
 .DS_Store
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
