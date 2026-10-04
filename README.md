@@ -13,17 +13,17 @@ React の画面から FastAPI の Hello World API を呼び出せます。
 
 ### 必要なツール
 
-以下のバージョンで実行します。
+ランタイムは最低バージョンを定義し、依存パッケージは固定します。
 
-- Node.js: `26.5.0`
-- npm: `11.17.0`
-- Python: `3.13.11`
+- Node.js: `24` 以上（Vite+ の条件により、24系は `24.11.0` 以上）。
+- npm: `11.17.0` 以上。
+- Python: `3.13` 以上。
 - uv: `0.10.12` で検証済み。
 
-バージョン設定は各ディレクトリに配置しています。
+最低バージョンは依存定義に記載しています。
 
-- `frontend/` と `e2e/`: `.node-version` と `package.json`。
-- `backend/`: `.python-version` と `pyproject.toml`。
+- `frontend/` と `e2e/`: `package.json` の `engines`。
+- `backend/`: `pyproject.toml` の `requires-python`。
 - Vite+: プロジェクト内の依存を使用。グローバルの `vp` インストールは不要です。
 
 ### 依存のインストール
@@ -42,6 +42,19 @@ npm --prefix e2e run browser:install
 - 直接依存: 完全なバージョンで指定。
 - 間接依存: 各ディレクトリの lockfile で固定。
 - 通常のセットアップ: `npm ci` と `uv sync --locked` を使用。
+
+### npm のインストール制限
+
+依存パッケージの自動スクリプトを無効化し、公開後7日を経過したバージョンを選択します。
+
+- 設定場所: `frontend/.npmrc` と `e2e/.npmrc`。
+- `ignore-scripts=true`: インストール時の `preinstall`・`install`・`postinstall` などを実行しません。
+- `min-release-age=7`: 依存解決時に公開後7日未満のバージョンを除外します。
+- `save-exact=true`: 依存追加時に完全なバージョンを保存します。
+- `npm run` と `npm test`: 指定したスクリプトは実行できます。付随する pre/post スクリプトは実行しません。
+
+通常のセットアップでは lockfile を維持し、更新時にも同じ制限で依存を解決します。
+設定の仕様は [npm の公式ドキュメント](https://docs.npmjs.com/cli/v11/using-npm/config/) を参照してください。
 
 ## 起動と動作確認
 
