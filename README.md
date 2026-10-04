@@ -4,7 +4,7 @@
 
 React から API を呼び出し、正常時とエラー時の CORS の挙動を検証する PoC です。
 
-- 現在: React と FastAPI の疎通、基本的な CORS、通信失敗からの再試行、コンテナ実行と構造化ログを確認。
+- 現在: React と FastAPI の疎通、基本的な CORS、通信失敗からの再試行、コンテナ実行と構造化ログ、Terraform による ECR 作成とイメージ push を確認。
 - 今後: Amplify Hosting、API Gateway REST API、Lambda 上の Web Adapter 動作を検証。
 - 開発・実行手順: 各ディレクトリの README に記載。
 
@@ -65,6 +65,21 @@ flowchart LR
 | 例外の記録 | テスト用 API の未処理例外を ERROR ログに記録し、500 を返す | API テスト |
 | 記録するデータ | 本文・クエリ文字列・認証ヘッダーをログに含めない | API テスト |
 
+### ECR とイメージの登録
+
+ECR の作成と Docker イメージの push を分離して実行できることを確認しています。
+
+| 検証内容 | 確認できたこと | 検証方法 |
+| --- | --- | --- |
+| ECR 専用の IaC | ECR 1件を独立した Terraform state で作成できる | plan / apply |
+| 再適用の差分 | 作成後の plan が変更なしになる | Terraform |
+| リポジトリ設定 | immutable タグ、push 時のスキャン、AES256 暗号化が設定される | AWS CLI |
+| イメージ登録 | 独立スクリプトで push し、digest URI を取得できる | Docker / AWS CLI |
+| 入力と終了処理 | 不正タグ・異なるアーキテクチャを拒否し、成功・失敗時に一時認証設定を削除する | ローカルテスト |
+| 脆弱性スキャン | 初回イメージのスキャン完了と検出内容を確認できる | ECR basic scanning |
+
+初回スキャン（2026-10-04）は Critical 3件・High 13件・Medium 7件・Low 2件を検出しています。Critical はベースイメージ内の Perl に関する検出で、イメージ更新による解消は未検証です。
+
 Lambda Web Adapter の拡張機能起動とイベント変換、エラーレスポンスの CORS、AWS 上の統合は今後の検証対象です。
 
 ## 今後の検証対象
@@ -72,7 +87,8 @@ Lambda Web Adapter の拡張機能起動とイベント変換、エラーレス�
 以下は、まだ検証していない構成と動作です。
 
 - Lambda 実行: Web Adapter の拡張機能起動とイベント変換、CloudWatch でのログ確認。
-- AWS API: ECR、Lambda、API Gateway REST API、Terraform による構成管理。
+- AWS API: Lambda、API Gateway REST API、Terraform による構成管理。
+- イメージ: スキャンで検出した脆弱性への対応と再スキャン。
 - 配信: Amplify Hosting と手動デプロイ。
 - エラー時 CORS: アプリの4xx・5xx、Gateway と Lambda 統合の障害。
 - 追加検討: 認証方式と credentials を含む CORS。
@@ -83,6 +99,7 @@ Lambda Web Adapter の拡張機能起動とイベント変換、エラーレス�
 
 - [frontend](frontend/README.md): 開発環境、画面の起動、API URL の設定、型検査・ビルド。
 - [backend](backend/README.md): 開発環境、API・コンテナの起動、構造化ログ、API テスト。
+- [infra](infra/README.md): ECR 専用 Terraform、認証と state の管理。
 - [e2e](e2e/README.md): 通常・コンテナのブラウザーテスト、画面キャプチャ・トレース確認。
 
 まず frontend と backend のセットアップ・疎通を確認し、ブラウザーでの自動検証には e2e の手順を使用してください。

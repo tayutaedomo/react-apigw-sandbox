@@ -112,7 +112,37 @@ docker compose up --no-build
 - 実行イメージには実行時に必要な依存だけを追加。
 - ローカル実行は非 root・読み取り専用とし、権限昇格を禁止。
 - 実装詳細は [Dockerfile](Dockerfile) と [Compose 設定](compose.yaml) のコメントを参照。
-- AWS 上の実行権限と脆弱性検査は未検証。
+- AWS 上の実行権限は未検証。初回の ECR スキャン結果は [ルート README](../README.md#ecr-とイメージの登録)を参照。
+
+## ECR への push
+
+### 前提と方針
+
+ビルド済みのイメージを、Terraform で作成した private ECR に push します。
+
+- 前提: [ECR の作成](../infra/ecr/README.md)を完了し、ローカル state を保持。
+- 認証: SSO ログイン済みの `AWS_PROFILE` を実行環境で指定。
+- ビルド: push スクリプトからは実行しない。
+- タグ: immutable のため、push ごとに一意のタグを指定。
+- Lambda 向け: `linux/amd64` のイメージを使用し、digest URI を取得。
+
+### 実行コマンド
+
+以下は `backend/` 内で実行します。
+
+```sh
+./scripts/build-image.sh
+./scripts/push-image.sh phase-3-001
+```
+
+- ローカルイメージの変更: `./scripts/push-image.sh phase-3-002 sandbox-api:check`。
+- push 先: `infra/ecr` の Terraform output から取得。
+- リージョン: ECR URL から取得し、認証・照会先を一致させる。
+- 出力: `Image URI: <repository-url>@sha256:<digest>`。
+- ログイントークン: 標準入力で Docker に渡し、一時的な認証設定は終了時に削除。
+- スキャン結果: [ECR の README](../infra/ecr/README.md#push-とスキャン)を参照。
+
+ビルド・リポジトリ作成・push はそれぞれ独立して実行し、後続のデプロイには digest URI を渡します。
 
 ## 構造化ログ
 
@@ -194,6 +224,7 @@ uv run --locked pytest
 - 例外を記録し、500 レスポンスを維持すること。
 - 同時リクエスト間で相関 ID とステータスを混同しないこと。
 - 本文・クエリ文字列・認証ヘッダーを記録しないこと。
+- push スクリプトの不正入力の拒否、digest URI の出力、成功・失敗時の一時認証設定削除。
 
 ## 操作のまとめ
 
