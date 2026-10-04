@@ -9,6 +9,14 @@ React の画面から FastAPI の Hello World API を呼び出せます。
 - ブラウザーテスト: Playwright。
 - 実行環境: ローカル。AWS リソースの作成・デプロイは含みません。
 
+### ディレクトリごとの手順
+
+各ディレクトリ内での操作と開発環境は、以下の README に記載しています。
+
+- [frontend](frontend/README.md): 画面の開発、API URL の設定、型検査・ビルド。
+- [backend](backend/README.md): API の起動、CORS、API テスト。
+- [e2e](e2e/README.md): Playwright のセットアップ、実行、トレース確認。
+
 ## セットアップ
 
 ### 必要なツール
