@@ -1,0 +1,29 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #172235;
+  background: #f5f7fa;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 640px;
+  margin: 64px auto;
+  padding: 24px;
+}
+
+button {
+  padding: 12px 18px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+}
+
+[role='alert'] {
+  color: #a12121;
+}
