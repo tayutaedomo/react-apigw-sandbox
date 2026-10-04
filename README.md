@@ -58,6 +58,7 @@ flowchart LR
 | イメージのビルド | 独立スクリプトで digest 固定の `linux/amd64` イメージを作成できる | Docker ビルド |
 | コンテナからの疎通 | React からコンテナ内の API を呼び、通信失敗後の再試行もできる | Playwright |
 | Lambda 向けの配置 | Web Adapter の実行ファイルを同梱し、テスト依存を含めない | コンテナ内の確認 |
+| 実行権限と同梱物 | 非 root で実行し、実行イメージに uv・テスト依存を含めない | コンテナ内の確認 |
 | 読み取り専用での実行 | `/tmp` を用意した読み取り専用コンテナで API が動く | コンテナ起動・HTTP 疎通 |
 | JSON ログ | HTTP と Uvicorn 起動ログを JSON として読み取れる | コンテナログの確認 |
 | リクエストの識別 | ステータス・処理時間・相関 ID を記録し、同時リクエストで混同しない | API テスト |
@@ -68,7 +69,7 @@ Lambda Web Adapter の拡張機能起動とイベント変換、エラーレス�
 
 ## 今後の検証対象
 
-AWS 上の構成を追加し、PoC の結果をこの README に追記していきます。
+以下は、まだ検証していない構成と動作です。
 
 - Lambda 実行: Web Adapter の拡張機能起動とイベント変換、CloudWatch でのログ確認。
 - AWS API: ECR、Lambda、API Gateway REST API、Terraform による構成管理。
@@ -82,6 +83,6 @@ AWS 上の構成を追加し、PoC の結果をこの README に追記してい�
 
 - [frontend](frontend/README.md): 開発環境、画面の起動、API URL の設定、型検査・ビルド。
 - [backend](backend/README.md): 開発環境、API・コンテナの起動、構造化ログ、API テスト。
-- [e2e](e2e/README.md): 通常・コンテナのブラウザーテスト、失敗時のトレース確認。
+- [e2e](e2e/README.md): 通常・コンテナのブラウザーテスト、画面キャプチャ・トレース確認。
 
 まず frontend と backend のセットアップ・疎通を確認し、ブラウザーでの自動検証には e2e の手順を使用してください。

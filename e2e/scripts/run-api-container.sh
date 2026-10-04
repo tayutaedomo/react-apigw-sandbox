@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-container_name="sandbox-api-e2e-$$"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+project_name="sandbox-api-e2e-$$"
+compose=(docker compose --project-name "$project_name" --file "$script_dir/../../backend/compose.yaml")
 
 cleanup() {
-    docker rm --force "$container_name" >/dev/null 2>&1 || true
+    "${compose[@]}" down --timeout 5 >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-docker run --rm --init --platform linux/amd64 \
-    --name "$container_name" \
-    --read-only --tmpfs /tmp \
-    --publish 127.0.0.1:8000:8080 \
-    sandbox-api:local &
-
+# 起動設定は Compose に委譲し、このスクリプトはテスト固有の終了処理を担う。
+"${compose[@]}" up --no-build --abort-on-container-exit --exit-code-from api &
 wait "$!"

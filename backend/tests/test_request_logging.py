@@ -1,3 +1,18 @@
+"""リクエストログの概要・方針・ケース一覧。
+
+方針: ASGI アプリへ HTTP リクエストを送り、出力された JSON とレスポンスを
+照合する。Lambda コンテキストは Adapter のヘッダー形式を模擬し、AWS 実行の
+検証とは区別する。ログは StringIO に隔離して、並行処理の混同と秘密の漏洩も確認する。
+
+ケース:
+- 正常終了: ステータス・処理時間・ローカル UUID、クエリ・認証情報の非記録。
+- 405: 実際のステータスの記録、リクエスト本文の非記録。
+- 未処理例外: ERROR とスタックトレースの記録、500 の維持。
+- 並行処理: リクエストごとの ID とステータスが一致。
+- Lambda: 呼び出し ID の継承、コンテキスト欠落・破損時の継続。
+- ローカル: クライアントが送った Lambda コンテキストを信用しない。
+"""
+
 import asyncio
 from io import StringIO
 import json
@@ -17,6 +32,7 @@ from app.request_logging import RequestLoggingMiddleware
 
 @pytest.fixture
 def log_stream(monkeypatch):
+    monkeypatch.delenv("AWS_LAMBDA_RUNTIME_API", raising=False)
     stream = StringIO()
     logger = Logger(service=f"test-{uuid4()}", stream=stream)
     monkeypatch.setattr(request_logging, "logger", logger)
@@ -112,3 +128,43 @@ async def test_concurrent_requests_keep_separate_ids_and_statuses(log_stream):
         record = records[f"/work/{name}"]
         assert record["correlation_id"] == response.headers["x-request-id"]
         assert record["status_code"] == response.status_code
+
+
+def test_lambda_request_id_matches_log_and_response(log_stream, monkeypatch):
+    monkeypatch.setenv("AWS_LAMBDA_RUNTIME_API", "localhost:9001")
+    invocation_id = str(uuid4())
+    with TestClient(app) as client:
+        response = client.get("/hello", headers={
+            "x-amzn-lambda-context": json.dumps({"request_id": invocation_id})
+        })
+    [record] = read_logs(log_stream)
+    assert record["lambda_request_id"] == record["correlation_id"] == invocation_id
+    assert record["request_id_source"] == "lambda"
+    assert response.headers["x-request-id"] == invocation_id
+
+
+@pytest.mark.parametrize("context", [None, "not-json", "[]", '{"request_id":"invalid"}'])
+def test_lambda_without_valid_context_does_not_invent_id(log_stream, monkeypatch, context):
+    monkeypatch.setenv("AWS_LAMBDA_RUNTIME_API", "localhost:9001")
+    headers = {"x-amzn-lambda-context": context} if context is not None else {}
+    with TestClient(app) as client:
+        response = client.get("/hello", headers=headers)
+    [record] = read_logs(log_stream)
+    assert response.status_code == 200
+    assert "x-request-id" not in response.headers
+    assert "correlation_id" not in record
+    assert "lambda_request_id" not in record
+    assert record["request_id_source"] == "unavailable"
+
+
+def test_local_request_ignores_client_lambda_context(log_stream):
+    supplied_id = str(uuid4())
+    with TestClient(app) as client:
+        response = client.get("/hello", headers={
+            "x-amzn-lambda-context": json.dumps({"request_id": supplied_id})
+        })
+    [record] = read_logs(log_stream)
+    assert record["request_id_source"] == "local"
+    assert record["correlation_id"] != supplied_id
+    assert record["correlation_id"] == response.headers["x-request-id"]
+    UUID(record["correlation_id"])
