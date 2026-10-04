@@ -19,3 +19,4 @@ test-results/
 *.tfvars.json
 crash.log
 crash.*.log
+image-uri.txt

@@ -4,8 +4,8 @@
 
 React から API を呼び出し、正常時とエラー時の CORS の挙動を検証する PoC です。
 
-- 現在: React と FastAPI の疎通、基本的な CORS、通信失敗からの再試行、コンテナ実行と構造化ログ、Terraform による ECR 作成とイメージ push を確認。
-- 今後: Amplify Hosting、API Gateway REST API、Lambda 上の Web Adapter 動作を検証。
+- 現在: React と FastAPI の疎通、基本的な CORS、通信失敗からの再試行、コンテナ実行と構造化ログ、Terraform による ECR 作成・イメージ push と、Lambda / REST API 上の Hello World を確認。
+- 今後: Amplify Hosting、Gateway・Lambda 統合の障害、エラー時 CORS を検証。
 - 開発・実行手順: 各ディレクトリの README に記載。
 
 ## 現在の構成
@@ -26,6 +26,23 @@ flowchart LR
 - ログ: Powertools for AWS Lambda による JSON ログ。
 - ブラウザーテスト: Playwright / Chromium。
 - Vite プロキシ: 使用せず、別 Origin の通信を検証。
+
+### AWS の通信経路
+
+ローカルの React から、AWS 上の REST API を呼び出します。
+
+```mermaid
+flowchart LR
+    V["Vite+ 開発サーバー"] -->|React を配信| B[ブラウザー]
+    B -->|HTTPS| G[API Gateway REST API]
+    G -->|Lambda proxy| L["Lambda / Web Adapter / FastAPI"]
+    E[ECR] -.->|digest でイメージ指定| L
+```
+
+- 配信: 現在はローカル Vite。Amplify Hosting は未追加。
+- IaC: ECR と API を別の Terraform state で管理。
+- API と Lambda: SSO プロファイルのリージョンを使用。
+- 認証と credentials: 未導入。
 
 ## 検証済みの PoC
 
@@ -81,14 +98,26 @@ ECR の作成と Docker イメージの push を分離して実行できるこ�
 
 初回スキャン（2026-10-04）は Critical 3件・High 13件・Medium 7件・Low 2件を検出しています。Critical はベースイメージ内の Perl に関する検出で、イメージ更新による解消は未検証です。
 
-Lambda Web Adapter の拡張機能起動とイベント変換、エラーレスポンスの CORS、AWS 上の統合は今後の検証対象です。
+### Lambda と REST API
+
+Lambda 上の Web Adapter を経由し、React から Hello World を取得できることを確認しています。
+
+| 検証内容 | 確認できたこと | 検証方法 |
+| --- | --- | --- |
+| digest 指定 | push の出力を plan へ渡し、Lambda の実行 digest が一致する | Terraform / AWS CLI |
+| Terraform の適用 | API 関連13リソースを追加し、再 plan で差分がない | plan / apply |
+| Web Adapter | 拡張機能が起動し、REST API のイベントを FastAPI へ渡せる | Playwright / CloudWatch |
+| ブラウザー疎通 | ローカル React が AWS の API を呼び、結果を表示する | Playwright |
+| CORS と再試行 | 許可 Origin の通信と、通信失敗後の回復を確認できる | Playwright |
+| 起動ログ | Uvicorn の起動ログを CloudWatch 上で JSON として取得できる | ログ解析 |
+| Request ID | HTTP ログの Lambda ID がプラットフォームログの ID と一致する | ログ解析 |
+
+Gateway 自身のエラー時 CORS、広範囲の障害、Amplify 上のブラウザー疎通は未検証です。
 
 ## 今後の検証対象
 
 以下は、まだ検証していない構成と動作です。
 
-- Lambda 実行: Web Adapter の拡張機能起動とイベント変換、CloudWatch でのログ確認。
-- AWS API: Lambda、API Gateway REST API、Terraform による構成管理。
 - イメージ: スキャンで検出した脆弱性への対応と再スキャン。
 - 配信: Amplify Hosting と手動デプロイ。
 - エラー時 CORS: アプリの4xx・5xx、Gateway と Lambda 統合の障害。

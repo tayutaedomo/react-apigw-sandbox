@@ -105,7 +105,7 @@ docker compose up --no-build
 - 終了: `Ctrl+C` の後に `docker compose down` でコンテナとネットワークを削除。
 - ブラウザー検証: [e2e のコンテナテスト](../e2e/README.md#コンテナを使ったテスト)を使用。
 
-ローカルでは Uvicorn に直接アクセスします。Lambda Web Adapter の Lambda イベント変換・拡張機能起動は、AWS 上で別途検証します。
+ローカルでは Uvicorn に直接アクセスします。Lambda Web Adapter のイベント変換・拡張機能起動は、[AWS API の検証](../infra/api/README.md#疎通とログ)で確認します。
 
 ### 実行イメージと権限
 
@@ -114,7 +114,7 @@ docker compose up --no-build
 - 実行イメージには実行時に必要な依存だけを追加。
 - ローカル実行は非 root・読み取り専用とし、権限昇格を禁止。
 - 実装詳細は [Dockerfile](Dockerfile) と [Compose 設定](compose.yaml) のコメントを参照。
-- AWS 上の実行権限は未検証。初回の ECR スキャン結果は [ルート README](../README.md#ecr-とイメージの登録)を参照。
+- Lambda 上でもアプリと Web Adapter の実行を確認済み。初回の ECR スキャン結果は [ルート README](../README.md#ecr-とイメージの登録)を参照。
 
 ## ECR への push
 
@@ -125,7 +125,7 @@ docker compose up --no-build
 - 前提: [ECR の作成](../infra/ecr/README.md)を完了し、ローカル state を保持。
 - 認証: SSO ログイン済みの `AWS_PROFILE` を実行環境で指定。
 - ビルド: push スクリプトからは実行しない。
-- タグ: immutable のため、push ごとに一意のタグを指定。
+- タグ: immutable。省略時は Git SHA・UTC日時・プロセス ID で自動発番。明示指定も可能。
 - Lambda 向け: `linux/amd64` のイメージを使用し、digest URI を取得。
 
 ### 実行コマンド
@@ -134,13 +134,14 @@ docker compose up --no-build
 
 ```sh
 ./scripts/build-image.sh
-./scripts/push-image.sh phase-3-001
+./scripts/push-image.sh
 ```
 
 - ローカルイメージの変更: `./scripts/push-image.sh phase-3-002 sandbox-api:check`。
 - push 先: `infra/ecr` の Terraform output から取得。
 - リージョン: ECR URL から取得し、認証・照会先を一致させる。
-- 出力: `Image URI: <repository-url>@sha256:<digest>`。
+- 標準出力: `<repository-url>@sha256:<digest>` のみ。進捗は標準エラーへ出力。
+- Lambda への受け渡し: `./scripts/push-image.sh > ../infra/api/image-uri.txt`。以後は [API の手順](../infra/api/README.md)を参照。
 - ログイントークン: 標準入力で Docker に渡し、一時的な認証設定は終了時に削除。
 - スキャン結果: [ECR の README](../infra/ecr/README.md#push-とスキャン)を参照。
 
