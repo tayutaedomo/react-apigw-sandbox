@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from app.request_logging import RequestLoggingMiddleware
+
 
 class HelloResponse(BaseModel):
     message: str
@@ -15,6 +17,7 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=[],
 )
+app.add_middleware(RequestLoggingMiddleware)
 
 
 @app.get("/hello", response_model=HelloResponse)
