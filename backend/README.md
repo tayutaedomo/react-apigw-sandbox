@@ -84,6 +84,8 @@ CORS はブラウザーがレスポンスを読み取れるかの制御です。
 - 既定のタグ: `sandbox-api:local`。
 - タグの変更: `./scripts/build-image.sh sandbox-api:check`。
 - Dockerfile: Python、uv、Lambda Web Adapter のイメージを digest で固定。
+- OS パッケージ: ビルドごとに更新を確認して適用。更新ステージのキャッシュは再利用しません。
+- 再現性: OS 更新でビルド結果が変わるため、配布・実行には完成イメージの digest を使用。
 - アプリ依存: `uv.lock` からインストール。テスト依存は含めません。
 - Lambda Web Adapter: `/opt/extensions/lambda-adapter` に配置。
 - 出力: 単一アーキテクチャのイメージをローカル Docker に読み込み。
