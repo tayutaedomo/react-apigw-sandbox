@@ -1,18 +1,32 @@
 # React / API Gateway Sandbox
 
-React と FastAPI のローカル構成です。
+## 概要
 
-## 必要なツール
+React の画面から FastAPI の Hello World API を呼び出せます。
 
-- Node.js `26.5.0`
-- npm `11.17.0`
-- Python `3.13.11`
-- uv（`0.10.12` で検証）
-
-Node.js と npm のバージョンは `frontend/` と `e2e/`、Python は `backend/` に設定しています。
-Vite+ はローカル依存なので、グローバルの `vp` インストールは不要です。
+- フロントエンド: React、Vite+、TypeScript 7。
+- バックエンド: FastAPI。
+- ブラウザーテスト: Playwright。
+- 実行環境: ローカル。AWS リソースの作成・デプロイは含みません。
 
 ## セットアップ
+
+### 必要なツール
+
+以下のバージョンで実行します。
+
+- Node.js: `26.5.0`
+- npm: `11.17.0`
+- Python: `3.13.11`
+- uv: `0.10.12` で検証済み。
+
+バージョン設定は各ディレクトリに配置しています。
+
+- `frontend/` と `e2e/`: `.node-version` と `package.json`。
+- `backend/`: `.python-version` と `pyproject.toml`。
+- Vite+: プロジェクト内の依存を使用。グローバルの `vp` インストールは不要です。
+
+### 依存のインストール
 
 リポジトリのルートで実行します。
 
@@ -23,44 +37,78 @@ uv sync --project backend --locked
 npm --prefix e2e run browser:install
 ```
 
-直接依存は完全なバージョンで指定し、間接依存は各ディレクトリの lockfile で固定しています。
-通常のインストールには `npm ci` と `uv sync --locked` を使います。
+依存バージョンを再現するため、lockfile を使ってインストールします。
 
-## 起動
+- 直接依存: 完全なバージョンで指定。
+- 間接依存: 各ディレクトリの lockfile で固定。
+- 通常のセットアップ: `npm ci` と `uv sync --locked` を使用。
 
-ターミナル1:
+## 起動と動作確認
+
+### バックエンドの起動
+
+ターミナル1で FastAPI を起動します。
 
 ```sh
 cd backend
 uv run --locked uvicorn app.main:app --reload --host localhost --port 8000
 ```
 
-ターミナル2（リポジトリのルート）:
+### フロントエンドの起動
+
+ターミナル2で、リポジトリのルートから React を起動します。
 
 ```sh
 npm --prefix frontend run dev
 ```
 
-`http://localhost:5173` に Hello World が表示されます。
-「API を呼び出す」を押すと `GET http://localhost:8000/hello` を呼び、
-`API: Hello World` を表示します。
-API ドキュメントは `http://localhost:8000/docs` です。
+### 画面と API の確認
+
+ブラウザーで `http://localhost:5173` を開きます。
+
+- 初期表示: `Hello World`。
+- 「API を呼び出す」をクリック: `GET http://localhost:8000/hello` を実行。
+- 成功時: `API: Hello World` を表示。
+- 失敗時: エラーを表示。ボタンから再試行できます。
+- API ドキュメント: `http://localhost:8000/docs`。
 
 ## 設定
 
-API URL の既定値は `http://localhost:8000` です。
-変更する場合は `frontend/.env.example` を `frontend/.env.local` にコピーし、
-`VITE_API_BASE_URL` を編集して開発サーバーを再起動してください。
-この値はブラウザーに公開されるため秘密情報は入れません。
+### API URL の変更
 
-CORS の許可 Origin は `http://localhost:5173` のみです。
-`127.0.0.1` で開いた画面は対象外です。credentials は送信しません。
-ブラウザーから API を直接呼び、Vite プロキシは使いません。
+`VITE_API_BASE_URL` で接続先を変更できます。既定値は `http://localhost:8000` です。
 
-`frontend/package.json` の Vite alias と override は、React プラグインを
-Vite+ の固定 core に接続するための設定です。
+1. `frontend/.env.example` を `frontend/.env.local` にコピーします。
+2. `VITE_API_BASE_URL` を編集します。
+3. フロントエンドの開発サーバーを再起動します。
+
+この値はブラウザーに公開されるため、秘密情報は入れません。
+
+### CORS とアクセス先
+
+画面は `http://localhost:5173` で開いてください。この Origin のみを API が許可します。
+
+- `http://127.0.0.1:5173`: 別 Origin のため対象外。
+- API 呼び出し: ブラウザーから直接実行。Vite プロキシは使いません。
+- credentials: 送信しません。
+
+ホスト名とポートを変更した場合は、API の許可 Origin も見直してください。
+
+### Vite+ と React プラグイン
+
+React プラグインには、Vite+ と同じ固定 core を使わせます。
+
+- 設定場所: `frontend/package.json`。
+- Vite alias: `@voidzero-dev/vite-plus-core` に接続。
+- override: 間接依存の Vite も同じ core に統一。
+
+この設定により、React プラグインと Vite+ の core を揃えます。
 
 ## テスト
+
+### 実行コマンド
+
+リポジトリのルートで実行します。Playwright は両サーバーを自動起動するため、手動起動したサーバーは先に停止してください。
 
 ```sh
 npm --prefix frontend run check
@@ -69,6 +117,18 @@ uv run --directory backend --locked pytest
 npm --prefix e2e test
 ```
 
-API テストは Hello レスポンスと Origin の許可・不許可を確認します。
-Playwright は frontend と backend を自動起動し、実 API 疎通と通信失敗後の再試行を確認します。
-手動で起動したサーバーはテスト前に停止してください。
+### 確認する内容
+
+各コマンドは次の項目を確認します。
+
+- `check`: TypeScript の型検査と lint。
+- `build`: フロントエンドのビルド。
+- `pytest`: Hello レスポンス、Origin の許可・不許可。
+- Playwright: 別 Origin の実 API 疎通、通信失敗後の再試行。
+
+## 操作のまとめ
+
+- 初回: 依存と Chromium をインストールします。
+- 起動: バックエンドとフロントエンドを別ターミナルで実行します。
+- 確認: `http://localhost:5173` で API 呼び出しを試します。
+- 検証: 手動起動したサーバーを停止し、テストコマンドを実行します。
