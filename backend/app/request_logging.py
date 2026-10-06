@@ -52,7 +52,7 @@ class RequestLoggingMiddleware:
 
         started = perf_counter()
         correlation_id, id_source = request_id(scope)
-        # レスポンス開始前の例外は、外側のエラーハンドラーが 500 に変換する。
+        # レスポンス開始前の例外でも未設定の値にしない。通常は実際の500を取得する。
         status_code = 500
 
         async def send_with_request_id(message: Message) -> None:
@@ -85,7 +85,7 @@ class RequestLoggingMiddleware:
             await self.app(scope, receive, send_with_request_id)
         except Exception:
             logger.exception("HTTP request failed", extra=fields())
-            # エラー処理は FastAPI に任せ、例外を成功レスポンスへ変換しない。
+            # FastAPI は500送信後も例外を再送出する。ERROR に記録して再送出を維持する。
             raise
         else:
             # extra はログ1件に限定され、並行処理間で Logger の状態を共有しない。

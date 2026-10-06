@@ -12,7 +12,7 @@ export default defineConfig({
   ...baseConfig,
   webServer: [{
     cwd: fileURLToPath(new URL('../frontend', import.meta.url)),
-    command: 'npm run dev',
+    command: 'npm run dev -- --host 127.0.0.1',
     env: { VITE_API_BASE_URL: apiBaseUrl },
     url: 'http://localhost:5173',
     reuseExistingServer: false,

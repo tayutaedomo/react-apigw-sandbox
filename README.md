@@ -4,8 +4,8 @@
 
 React から API を呼び出し、正常時とエラー時の CORS の挙動を検証する PoC です。
 
-- 現在: ローカルと AWS 上で Hello World の疎通を確認。
-- 今後: Amplify Hosting、Gateway・Lambda 統合の障害、エラー時 CORS を検証。
+- 現在: ローカルと AWS 上で Hello World と、アプリのエラー時 CORS を検証。
+- 今後: Amplify Hosting、Gateway・Lambda 統合の障害時 CORS を検証。
 - 開発・実行手順: 各ディレクトリの README に記載。
 
 ## 現在の構成
@@ -49,7 +49,7 @@ flowchart LR
 検証済みの内容は [PoC の検証結果](docs/poc.md)にまとめています。
 
 - React / FastAPI: Hello World の表示と通信失敗後の再試行。
-- CORS: 許可・未許可 Origin と credentials 不許可。
+- CORS: 正常・エラー応答の読み取り、未許可 Origin・プリフライトの拒否、credentials 不許可。
 - コンテナ: OS 更新、非 root 実行、構造化ログ。
 - ECR: 独立した Terraform、イメージ push と digest 取得。
 - AWS API: Lambda / REST API の疎通と CloudWatch の Request ID 照合。
@@ -60,7 +60,7 @@ flowchart LR
 
 - イメージ: スキャンで検出した脆弱性への対応と再スキャン。
 - 配信: Amplify Hosting と手動デプロイ。
-- エラー時 CORS: アプリの4xx・5xx、Gateway と Lambda 統合の障害。
+- エラー時 CORS: Gateway 自身が返すエラーと Lambda 統合の障害。
 - 追加検討: 認証方式と credentials を含む CORS。
 
 ## 開発・実行手順への案内

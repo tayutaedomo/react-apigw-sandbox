@@ -6,6 +6,7 @@ Playwright の Chromium で、React から実際の FastAPI を呼び出す動�
 
 - 実 API 疎通: 別 Origin の通信と Hello World の表示。
 - 通信失敗: エラー表示と、接続回復後の再試行。
+- エラー時 CORS: 4xx・5xxの読み取り、Origin拒否、プリフライトと再試行。
 - サーバー起動: Playwright が frontend と backend を自動起動。
 
 以下のコマンドは、すべて `e2e/` 内で実行します。
@@ -47,6 +48,8 @@ npm test
 - frontend: `http://localhost:5173`。
 - backend: `http://localhost:8000`。
 - 既存サーバー: 再利用しません。ポート競合は解消してから実行します。
+- エラー検証 API: ローカル・コンテナではテスト起動時に自動で有効化。
+- frontend の待ち受け: IPv4ループバック。`localhost` と `127.0.0.1` の別 Origin を同じ画面で検証。
 - API URL: frontend の `.env.local` を変更している場合は、既定の `http://localhost:8000` に戻してください。
 - 終了時: Playwright が起動したサーバーを停止します。
 
@@ -85,12 +88,27 @@ npm run test:container
 AWS_API_BASE_URL="$(terraform -chdir=../infra/api output -raw api_base_url)" npm run test:aws
 ```
 
-- 前提: [API の Terraform](../infra/api/README.md)を適用済み。
+- 前提: [API の Terraform](../infra/api/README.md)を適用し、`enable_error_endpoints=true` に設定済み。
 - 起動: frontend のみ。API URL は環境変数で渡し、実 URL をソースに保存しません。
 - サーバー: ローカル backend は起動しません。
-- ケース: 既存の疎通・再試行に加え、HTTP レスポンスの呼び出し ID を確認。
+- ケース: 疎通・再試行・呼び出し ID と、エラー時 CORS・プリフライトを確認。
+- エラー API を無効のまま疎通だけ検証: `npm run test:aws -- tests/hello.spec.ts`。
 - ローカルモード: AWS 専用ケースは skip。
 - 実行結果: 通常モードと同じ場所へ保存するため、前回のレポートを上書きします。
+
+### エラー時 CORS のケース
+
+実レスポンスを使い、HTTP エラーとブラウザーの読み取り拒否を区別します。
+
+- 読み取り: 404・405・422、400・409・418・429・500・502・503・504、未処理例外と応答検証500。
+- ヘッダー: ブラウザーの JavaScript から Request ID と Retry-After を取得。
+- Origin拒否: `127.0.0.1:5173` で同じ画面を開き、本文が公開されないことを確認。
+- プリフライト: GET許可、Origin・ヘッダー・メソッド拒否。本リクエストの応答有無を Chromium の CDP で観測。
+- 再試行: 拒否後に許可ケースへ切り替えて読み取り可能になることを確認。
+- 添付: 操作前後のPNGと、プリフライト・本リクエストの応答一覧。
+- モック: このテストでは API 応答を差し替えない。
+
+プリフライトが拒否された場合、API の400本文を画面で読めるわけではありません。ブラウザーは本リクエストを送らず、fetch を失敗させます。
 
 ### テストを指定して実行
 
@@ -107,6 +125,7 @@ npm test -- tests/hello.spec.ts
 - `playwright.aws.config.ts`: API を AWS endpoint に切り替え、frontend のみ起動。
 - `scripts/run-api-container.sh`: コンテナを起動し、終了・中断時に削除。
 - `tests/hello.spec.ts`: 疎通と通信失敗・再試行のテスト。
+- `tests/error-cors.spec.ts`: エラー本文・相関 ID、Origin・プリフライトと再試行のテスト。
 - `test-results/`: テストの出力。Git 管理の対象外。
 
 ### 画面キャプチャと HTML レポート

@@ -92,6 +92,8 @@ resource "aws_lambda_function" "api" {
     variables = {
       # Uvicorn と HTTP ログの出力レベルをアプリ側でも INFO に揃える。
       POWERTOOLS_LOG_LEVEL = "INFO"
+      # 検証時だけ意図的なエラー API を公開し、通常は登録しない。
+      ENABLE_ERROR_ENDPOINTS = tostring(var.enable_error_endpoints)
       # Web Adapter の readiness 待機を初期化フェーズ内で行う。
       AWS_LWA_ASYNC_INIT = "false"
     }
