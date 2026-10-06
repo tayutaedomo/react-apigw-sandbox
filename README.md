@@ -73,7 +73,7 @@ flowchart LR
 
 ## 開発・実行手順への案内
 
-操作する対象の README を参照してください。コマンドは各ディレクトリ内で実行します。
+開発は各ディレクトリの README、AWS への公開・更新は [ユースケース別のデプロイ手順](docs/deployment.md)を参照してください。各 README のコマンドは対象ディレクトリ内、デプロイ手順のコマンドはリポジトリのルートで実行します。
 
 - [frontend](frontend/README.md): 開発環境、画面の起動、API URL の設定、型検査・ビルド、Amplify への手動デプロイ。
 - [backend](backend/README.md): 開発環境、API・コンテナの起動、構造化ログ、API テスト。

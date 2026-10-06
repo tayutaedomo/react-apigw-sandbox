@@ -61,7 +61,7 @@ API 呼び出しを確認する前に、別ターミナルでバックエンド�
 
 「エラーレスポンスの CORS 検証」でケースを選び、実 API のエラー応答を確認できます。
 
-- 前提: backend の `ENABLE_ERROR_ENDPOINTS=true`。AWS では [API の設定](../infra/app/README.md#エラー検証-api-と追加-origin)を使用。
+- 前提: backend の `ENABLE_ERROR_ENDPOINTS=true`。AWS では [API の設定](../infra/app/README.md#入力の方針)を使用。
 - 読み取り成功: HTTP ステータス・本文・Request ID、429では Retry-After を表示。
 - 読み取り失敗: CORS または通信状態の確認を案内。fetch の例外だけでは原因を断定しません。
 - プリフライト: 許可 GET、未許可ヘッダー、未許可 PUT を選択可能。
@@ -84,7 +84,7 @@ cp .env.example .env.local
 - この値はビルド時にフロントへ取り込まれ、ブラウザーに公開されます。
 - 秘密情報は設定しません。
 - ローカルの既定の許可 Origin は `http://localhost:5173`。画面を `127.0.0.1` で開くと別 Origin になります。
-- Amplify 配信時: [app の Terraform](../infra/app/README.md#エラー検証-api-と追加-origin)が配信先 Origin を自動追加。
+- Amplify 配信時: [app の Terraform](../infra/app/README.md#入力の方針)が配信先 Origin を自動追加。
 - Vite プロキシと credentials は使用しません。
 
 ## チェックとビルド
@@ -111,6 +111,8 @@ npm run build
 ## Amplify への手動デプロイ
 
 ### 準備と公開の流れ
+
+初回・更新・再公開・切り戻しの操作順序は [ユースケース別のデプロイ手順](../docs/deployment.md)を参照してください。この節は各スクリプトの入力と役割を説明します。
 
 ローカルでビルドした `dist/` を手動で公開します。Terraform にデプロイ処理は含めません。
 

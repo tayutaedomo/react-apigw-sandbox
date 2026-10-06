@@ -4,7 +4,7 @@
 
 - [構成と方針](#構成と方針)
 - [開発環境と認証](#開発環境と認証)
-- [初回構築と更新](#初回構築と更新)
+- [デプロイ手順と変数](#デプロイ手順と変数)
 - [疎通とログ](#疎通とログ)
 - [既存環境の state 移行](#既存環境の-state-移行)
 - [削除とまとめ](#削除とまとめ)
@@ -45,77 +45,31 @@ export AWS_PROFILE='<使用するプロファイル>'
 - 必要な権限: Lambda、IAM、CloudWatch Logs、API Gateway、Amplify の管理と ECR の照会・push。
 - 認証情報・実環境値・state・plan・個別 tfvars: Git 管理対象外。
 
-## 初回構築と更新
+## デプロイ手順と変数
 
-### API イメージの準備
+初回構築・更新・切り戻しは [ユースケース別のデプロイ手順](../../docs/deployment.md)を参照してください。工程の順序とデプロイ後の確認を一か所にまとめています。
 
-`backend/` 内でビルドと push を別々に実行します。ECR は先に作成済みであることが前提です。
+- [初回構築](../../docs/deployment.md#初回に環境全体を構築する): ECR → イメージ → app → 画面の公開。
+- [API 更新](../../docs/deployment.md#バックエンドだけを更新する): 新しい digest で Lambda を更新。
+- [設定変更](../../docs/deployment.md#aws-の設定だけを変更する): 現在の digest を維持して plan・apply。
+- [画面更新](../../docs/deployment.md#フロントエンドだけを更新する): Terraform apply を実行せず、ビルドと手動公開。
+- [切り戻し](../../docs/deployment.md#以前のバージョンへ切り戻す): 保存した digest・静的成果物を使用。
 
-```sh
-./scripts/build-image.sh
-./scripts/push-image.sh > ../infra/app/image-uri.txt
-```
+### 入力の方針
 
-- イメージ: `sandbox-api:local` をビルドし、private ECR に push。
-- リモートタグ: 省略時は Git SHA・UTC日時・プロセス ID で自動発番。
-- `image-uri.txt`: digest URI の受け渡しファイル。Git 管理対象外。
-- 同じイメージの配布: 再ビルドせず同じ digest を使用。
+| 入力 | 用途 | 既定・受け渡し |
+| --- | --- | --- |
+| `image_uri` | 実行するコンテナ | `image-uri.txt` または plan スクリプトの引数。digest 必須 |
+| `repository_name` | 既存 ECR の照会 | `react-apigw-sandbox-api` |
+| `enable_error_endpoints` | 意図的なエラー API の有効化 | `false`。検証で有効にした状態は個別 tfvars で継続保持 |
+| `allowed_origins` | Hosting 以外に許可する Origin | `http://localhost:5173`。Hosting は自動追加 |
 
-### Terraform の適用
-
-`infra/app/` に戻り、API と Hosting を一度の plan / apply で管理します。
-
-```sh
-terraform init -lockfile=readonly
-terraform fmt -check
-terraform validate
-./scripts/plan.sh
-terraform apply app.tfplan
-terraform output -raw api_base_url
-terraform output -raw hosting_url
-```
-
-- plan: `image-uri.txt` を読み込み、`app.tfplan` に保存。
-- digest を直接渡す場合: `./scripts/plan.sh '<repository>@sha256:<digest>'`。
-- 検証: タグ指定と、指定 ECR repository に一致しない digest URI を拒否。
-- CORS: localhost と Hosting の Origin を完全一致で許可。Origin の手動受け渡しは不要。
-- 参照順: Hosting の作成・ドメイン取得後に Lambda の Origin 設定を適用。
-- API Gateway: イメージ・Lambda 環境変数だけの変更では再デプロイしません。
-- Hosting: 配信先の作成だけでは画面を公開しません。下記の手動デプロイが必要です。
-
-### エラー検証 API と追加 Origin
-
-意図的なエラー API は必要な場合だけ有効化します。
-
-```sh
-TF_VAR_enable_error_endpoints=true ./scripts/plan.sh
-terraform apply app.tfplan
-```
-
-- `enable_error_endpoints`: 既定 `false`。Lambda の `ENABLE_ERROR_ENDPOINTS` へ反映。
-- 有効状態を維持する更新: 同じ変数を渡して plan。省略すると検証 API は無効化されます。
-- `allowed_origins`: Hosting に加えて許可する一覧。既定は `http://localhost:5173`。
-- Hosting の Origin: 自動追加。`allowed_origins` に重複して書く必要はありません。
-- Hosting だけを許可する場合: `allowed_origins = []`。
-- 追加 Origin の形式: `http(s)://host[:port]`。wildcard・パス・末尾 `/` は使用しません。
-- 個別設定: Git 管理対象外の `*.auto.tfvars.json` で保持可能。
-- Lambda: 許可一覧を `CORS_ALLOW_ORIGINS` の JSON 配列へ変換して渡します。
-
-### React の手動公開
-
-`frontend/` 内で、リソース作成とは別に実行します。
-
-```sh
-./scripts/build-hosting.sh
-node scripts/deploy-hosting.mjs
-```
-
-- ビルド: app の API URL を JS へ埋め込み、`dist/` を生成。
-- 公開: app の app ID・branch・region を使い、ビルド済み ZIP をアップロード。
-- Git 連携・自動ビルド: 無効。Git push や Terraform apply だけでは画面を更新しません。
-- SPA: ページ URL は `index.html` へ rewrite。JS・CSS 等は除外。
-- URL: Amplify の既定 HTTPS ドメイン。独自ドメインは使用しません。
-- 詳細: [frontend の手動デプロイ手順](../../frontend/README.md#amplify-への手動デプロイ)。
+- `allowed_origins = []`: Hosting だけを許可。
+- Origin の形式: `http(s)://host[:port]`。wildcard・パス・末尾 `/` は使用しません。
+- Lambda: 許可一覧を `CORS_ALLOW_ORIGINS` の JSON 配列で渡します。
+- plan スクリプト: digest と変数を読み込み、`app.tfplan` に保存。apply は別操作。
+- Gateway: API 定義を変更した場合に deployment を更新。イメージ・Lambda 環境変数だけの変更では再デプロイしません。
+- Hosting: app の作成・apply は成果物を公開しません。
 
 ## 疎通とログ
 

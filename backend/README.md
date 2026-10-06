@@ -136,7 +136,7 @@ CORS_ALLOW_ORIGINS='["http://localhost:5173","https://sandbox.example.com"]' \
 - 指定時: 配列で置き換え。localhost を維持する場合は一覧に含めます。
 - 入力: 空・wildcard・パス・認証情報を含む URL 等は起動時に拒否。
 - 認証・credentials: この設定では追加しません。
-- AWS: [Terraform の Origin 設定](../infra/app/README.md#エラー検証-api-と追加-origin)から Lambda の環境変数へ渡します。
+- AWS: [Terraform の Origin 設定](../infra/app/README.md#入力の方針)から Lambda の環境変数へ渡します。
 
 許可範囲は完全一致とし、正常応答と未処理500に同じ設定を適用します。
 
@@ -188,6 +188,8 @@ Adapter と Uvicorn の通信と、接続再利用を無効化した理由は [�
 - Lambda 上でもアプリと Web Adapter の実行を確認済み。初回の ECR スキャン結果は [PoC の検証結果](../docs/poc.md#ecr-とイメージの登録)を参照。
 
 ## ECR への push
+
+API 更新全体の操作順序は [バックエンドの更新手順](../docs/deployment.md#バックエンドだけを更新する)を参照してください。この節は push スクリプト単体の操作を説明します。
 
 ### 前提と方針
 
