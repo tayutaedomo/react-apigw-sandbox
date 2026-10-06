@@ -1,5 +1,13 @@
 # React / API Gateway Sandbox
 
+## 目次
+
+- [このプロジェクトで検証すること](#このプロジェクトで検証すること)
+- [現在の構成](#現在の構成)
+- [PoC の概要](#poc-の概要)
+- [今後の検証対象](#今後の検証対象)
+- [開発・実行手順への案内](#開発実行手順への案内)
+
 ## このプロジェクトで検証すること
 
 React から API を呼び出し、正常時とエラー時の CORS の挙動を検証する PoC です。
@@ -24,7 +32,7 @@ flowchart LR
 - バックエンド: FastAPI + Uvicorn。
 - コンテナ: Lambda Web Adapter を同梱した `linux/amd64` イメージ。ローカルでは Uvicorn に直接アクセス。
 - ログ: Powertools for AWS Lambda による JSON ログ。
-- ブラウザーテスト: Playwright / Chromium。
+- ブラウザー・HTTP 結合テスト: Playwright。画面操作は Chromium を使用。
 - Vite プロキシ: 使用せず、別 Origin の通信を検証。
 
 ### AWS の通信経路
@@ -40,7 +48,7 @@ flowchart LR
 ```
 
 - 配信: Amplify Hosting。ビルドと手動デプロイは独立スクリプト。
-- IaC: ECR・API・Hosting を別の Terraform state で管理。
+- IaC: ECR と app を別 state で管理。app は API・Hosting・関連権限とログを統合。
 - API と Lambda: SSO プロファイルのリージョンを使用。
 - 認証と credentials: 未導入。
 
@@ -69,7 +77,7 @@ flowchart LR
 
 - [frontend](frontend/README.md): 開発環境、画面の起動、API URL の設定、型検査・ビルド、Amplify への手動デプロイ。
 - [backend](backend/README.md): 開発環境、API・コンテナの起動、構造化ログ、API テスト。
-- [infra](infra/README.md): ECR・API・Hosting の Terraform、認証と state の管理。
-- [e2e](e2e/README.md): ローカル・コンテナ・AWS・Hosting のブラウザーテスト、画面キャプチャ・トレース確認。
+- [infra](infra/README.md): ECR と app の Terraform、認証と state の管理。
+- [e2e](e2e/README.md): ローカル・コンテナ・AWS・Hosting のブラウザー／HTTP 結合テスト、画面キャプチャ・トレース確認。
 
 まず frontend と backend のセットアップ・疎通を確認し、ブラウザーでの自動検証には e2e の手順を使用してください。

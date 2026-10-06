@@ -1,5 +1,16 @@
 # エラー応答にも CORS を適用する理由
 
+## 目次
+
+- [結論](#結論)
+- [FastAPI が持つ2種類のエラー処理](#fastapi-が持つ2種類のエラー処理)
+- [exception_handler で500を統一しても再送出は残る](#exception_handler-で500を統一しても再送出は残る)
+- [add_middleware だけでは未処理500に届かない](#add_middleware-だけでは未処理500に届かない)
+- [現在の配置では500も CORS を通る](#現在の配置では500も-cors-を通る)
+- [複数のミドルウェアを追加する場合](#複数のミドルウェアを追加する場合)
+- [expose_headers と Retry-After](#expose_headers-と-retry-after)
+- [まとめ](#まとめ)
+
 ## 結論
 
 未処理例外の500をブラウザーから読めるようにするには、500を生成する処理も含めて FastAPI 全体を CORS で包みます。

@@ -24,10 +24,14 @@ async function fixture(t, uploadOk = true) {
   let uploaded = false;
   const cli = async (command, args, options) => {
     calls.push({ command, args });
-    if (command === 'terraform') return JSON.stringify(Object.fromEntries(
-      Object.entries({ app_id: 'dexample', branch_name: 'sandbox', region: 'us-west-2', hosting_url: 'https://sandbox.example.com' })
-        .map(([key, value]) => [key, { value }]),
-    ));
+    if (command === 'terraform') {
+      assert.match(args[0], /\/infra\/app$/);
+      assert.deepEqual(args.slice(1), ['output', '-json']);
+      return JSON.stringify(Object.fromEntries(
+        Object.entries({ app_id: 'dexample', branch_name: 'sandbox', region: 'us-west-2', hosting_url: 'https://sandbox.example.com' })
+          .map(([key, value]) => [key, { value }]),
+      ));
+    }
     if (command === 'zip') {
       archive = args[2];
       await execute(command, args, options);

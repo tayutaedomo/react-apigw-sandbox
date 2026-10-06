@@ -1,5 +1,15 @@
 # フロントエンド
 
+## 目次
+
+- [概要](#概要)
+- [開発環境](#開発環境)
+- [開発と動作確認](#開発と動作確認)
+- [チェックとビルド](#チェックとビルド)
+- [Amplify への手動デプロイ](#amplify-への手動デプロイ)
+- [依存インストールの設定](#依存インストールの設定)
+- [操作のまとめ](#操作のまとめ)
+
 ## 概要
 
 React の画面から FastAPI を直接呼び、取得結果や通信失敗を表示します。
@@ -51,7 +61,7 @@ API 呼び出しを確認する前に、別ターミナルでバックエンド�
 
 「エラーレスポンスの CORS 検証」でケースを選び、実 API のエラー応答を確認できます。
 
-- 前提: backend の `ENABLE_ERROR_ENDPOINTS=true`。AWS では [API の設定](../infra/api/README.md#エラー検証-api-の有効化)を使用。
+- 前提: backend の `ENABLE_ERROR_ENDPOINTS=true`。AWS では [API の設定](../infra/app/README.md#エラー検証-api-と追加-origin)を使用。
 - 読み取り成功: HTTP ステータス・本文・Request ID、429では Retry-After を表示。
 - 読み取り失敗: CORS または通信状態の確認を案内。fetch の例外だけでは原因を断定しません。
 - プリフライト: 許可 GET、未許可ヘッダー、未許可 PUT を選択可能。
@@ -74,7 +84,7 @@ cp .env.example .env.local
 - この値はビルド時にフロントへ取り込まれ、ブラウザーに公開されます。
 - 秘密情報は設定しません。
 - ローカルの既定の許可 Origin は `http://localhost:5173`。画面を `127.0.0.1` で開くと別 Origin になります。
-- Amplify 配信時: [API の許可 Origin](../infra/api/README.md#配信先-origin-の許可)へ配信先を追加。
+- Amplify 配信時: [app の Terraform](../infra/app/README.md#エラー検証-api-と追加-origin)が配信先 Origin を自動追加。
 - Vite プロキシと credentials は使用しません。
 
 ## チェックとビルド
@@ -113,7 +123,7 @@ flowchart LR
     S --> H
 ```
 
-- 前提: [Hosting 作成](../infra/hosting/README.md)と [API の Origin 許可](../infra/api/README.md#配信先-origin-の許可)を完了。
+- 前提: [アプリのリソース作成](../infra/app/README.md)を完了。Hosting の Origin は Terraform が自動で許可。
 - 認証: SSO ログイン済み。`AWS_PROFILE` は実行環境で指定。
 - ツール: Node.js・npm、Terraform、AWS CLI v2、`zip`。
 - 手動公開: Git push や Terraform apply では画面を更新しません。
@@ -126,7 +136,7 @@ flowchart LR
 ./scripts/build-hosting.sh 'https://example.execute-api.us-east-1.amazonaws.com/sandbox'
 ```
 
-- API URL: 省略時は `infra/api` の Terraform output を使用。
+- API URL: 省略時は `infra/app` の Terraform output を使用。
 - 出力: `dist/`。ビルド時の接続先が JS に埋め込まれます。
 - API の作成・更新、Hosting への公開: このスクリプトは実行しません。
 - 公開値: フロントの環境変数に秘密情報を入れません。
@@ -139,7 +149,7 @@ node scripts/deploy-hosting.mjs
 ```
 
 - 入力: 作成済みの `dist/`。ビルドを自動実行しません。
-- 配信先: `infra/hosting` の Terraform output から app・branch・region を取得。
+- 配信先: `infra/app` の Terraform output から app・branch・region を取得。
 - ZIP: `index.html` と assets をアーカイブ直下へ格納。`dist/` ディレクトリ自体は含めません。
 - 順序: ジョブ作成 → ZIP の PUT → 公開開始 → 完了待機。
 - 失敗: アップロード失敗時は公開を開始せず、配信失敗・待機上限は非0で終了。

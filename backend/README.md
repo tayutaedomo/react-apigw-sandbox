@@ -1,5 +1,18 @@
 # バックエンド
 
+## 目次
+
+- [概要](#概要)
+- [開発環境](#開発環境)
+- [起動と API の確認](#起動と-api-の確認)
+- [エラーレスポンスの CORS 検証](#エラーレスポンスの-cors-検証)
+- [許可 Origin の設定](#許可-origin-の設定)
+- [コンテナのビルドと起動](#コンテナのビルドと起動)
+- [ECR への push](#ecr-への-push)
+- [構造化ログ](#構造化ログ)
+- [テスト](#テスト)
+- [操作のまとめ](#操作のまとめ)
+
 ## 概要
 
 FastAPI で Hello World と、設定で有効化するエラー検証 API を提供します。
@@ -11,18 +24,6 @@ FastAPI で Hello World と、設定で有効化するエラー検証 API を提
 - pytest / httpx2: API テスト。
 
 以下のコマンドは、すべて `backend/` 内で実行します。
-
-## 目次
-
-- [開発環境](#開発環境)
-- [起動と API の確認](#起動と-api-の確認)
-- [エラーレスポンスの CORS 検証](#エラーレスポンスの-cors-検証)
-- [許可 Origin の設定](#許可-origin-の設定)
-- [コンテナのビルドと起動](#コンテナのビルドと起動)
-- [ECR への push](#ecr-への-push)
-- [構造化ログ](#構造化ログ)
-- [テスト](#テスト)
-- [操作のまとめ](#操作のまとめ)
 
 ## 開発環境
 
@@ -135,7 +136,7 @@ CORS_ALLOW_ORIGINS='["http://localhost:5173","https://sandbox.example.com"]' \
 - 指定時: 配列で置き換え。localhost を維持する場合は一覧に含めます。
 - 入力: 空・wildcard・パス・認証情報を含む URL 等は起動時に拒否。
 - 認証・credentials: この設定では追加しません。
-- AWS: [Terraform の Origin 設定](../infra/api/README.md#配信先-origin-の許可)から Lambda の環境変数へ渡します。
+- AWS: [Terraform の Origin 設定](../infra/app/README.md#エラー検証-api-と追加-origin)から Lambda の環境変数へ渡します。
 
 許可範囲は完全一致とし、正常応答と未処理500に同じ設定を適用します。
 
@@ -175,7 +176,7 @@ docker compose up --no-build
 
 Adapter と Uvicorn の通信と、接続再利用を無効化した理由は [接続再利用の図解](../docs/connection-reuse.md)を参照してください。
 
-ローカルでは Uvicorn に直接アクセスします。Lambda Web Adapter のイベント変換・拡張機能起動は、[AWS API の検証](../infra/api/README.md#疎通とログ)で確認します。
+ローカルでは Uvicorn に直接アクセスします。Lambda Web Adapter のイベント変換・拡張機能起動は、[AWS API の検証](../infra/app/README.md#疎通とログ)で確認します。
 
 ### 実行イメージと権限
 
@@ -211,7 +212,7 @@ Adapter と Uvicorn の通信と、接続再利用を無効化した理由は [�
 - push 先: `infra/ecr` の Terraform output から取得。
 - リージョン: ECR URL から取得し、認証・照会先を一致させる。
 - 標準出力: `<repository-url>@sha256:<digest>` のみ。進捗は標準エラーへ出力。
-- Lambda への受け渡し: `./scripts/push-image.sh > ../infra/api/image-uri.txt`。以後は [API の手順](../infra/api/README.md)を参照。
+- Lambda への受け渡し: `./scripts/push-image.sh > ../infra/app/image-uri.txt`。以後は [API の手順](../infra/app/README.md)を参照。
 - ログイントークン: 標準入力で Docker に渡し、一時的な認証設定は終了時に削除。
 - スキャン結果: [ECR の README](../infra/ecr/README.md#push-とスキャン)を参照。
 

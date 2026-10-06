@@ -11,7 +11,9 @@
     "test:container": "playwright test --config playwright.container.config.ts",
     "browser:install": "playwright install chromium",
     "test:aws": "playwright test --config playwright.aws.config.ts",
-    "test:hosting": "playwright test --config playwright.hosting.config.ts"
+    "test:hosting": "playwright test --config playwright.hosting.config.ts",
+    "test:browser": "playwright test --project=browser-chromium",
+    "test:http:hosting": "playwright test --config playwright.hosting.config.ts --project=http"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0"

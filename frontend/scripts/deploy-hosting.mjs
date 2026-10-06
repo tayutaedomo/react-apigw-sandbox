@@ -38,7 +38,7 @@ export async function waitForDeployment(getStatus, { sleep = delay, attempts = 1
 /** index.html を ZIP の直下に入れ、アップロード成功後だけ公開を開始する。 */
 export async function deploy({ distDir = join(frontendDir, 'dist'), cli = run, upload = fetch, sleep = delay } = {}) {
   await access(join(distDir, 'index.html')); // 未ビルド時は AWS に配信ジョブを作らない。
-  const outputs = JSON.parse(await cli('terraform', [`-chdir=${join(frontendDir, '../infra/hosting')}`, 'output', '-json']));
+  const outputs = JSON.parse(await cli('terraform', [`-chdir=${join(frontendDir, '../infra/app')}`, 'output', '-json']));
   const appId = outputs.app_id.value;
   const branch = outputs.branch_name.value;
   const region = outputs.region.value;

@@ -1,14 +1,21 @@
 # AWS リソース
 
+## 目次
+
+- [管理方針](#管理方針)
+- [認証と開発環境](#認証と開発環境)
+- [状態ファイルの管理](#状態ファイルの管理)
+- [操作のまとめ](#操作のまとめ)
+
 ## 管理方針
 
 リソースの作成順序に合わせて Terraform の作業ディレクトリと state を分離します。
 
 - [ecr](ecr/README.md): API イメージの保存先を作成。
-- [api](api/README.md): Lambda・API Gateway REST API・実行 role・ログを作成。
-- [hosting](hosting/README.md): Amplify の静的配信先を作成。API・ECR と独立した state。
-- Docker のビルド・push: [backend](../backend/README.md) の独立スクリプトで実行。
-- Amplify への配信: Terraform に含めず、手動デプロイを使用する方針。
+- [app](app/README.md): Lambda・REST API・Amplify・関連権限とログをまとめて作成。
+- Origin: 同じ app state の Hosting を参照し、API の CORS 許可へ自動追加。
+- Docker のビルド・push: [backend](../backend/README.md) の独立スクリプト。
+- React のビルド・Amplify への公開: [frontend](../frontend/README.md) の独立スクリプト。Terraform に公開処理は含めません。
 
 ## 認証と開発環境
 

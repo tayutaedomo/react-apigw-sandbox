@@ -9,7 +9,7 @@ if (( $# > 1 )); then
 fi
 
 # 接続先はビルド時に埋め込む。Terraform output を使うが AWS の更新は行わない。
-api_url="${1:-$(terraform -chdir="$frontend_dir/../infra/api" output -raw api_base_url)}"
+api_url="${1:-$(terraform -chdir="$frontend_dir/../infra/app" output -raw api_base_url)}"
 export VITE_API_BASE_URL="$api_url"
 node --input-type=module <<'JS'
 const url = new URL(process.env.VITE_API_BASE_URL);
