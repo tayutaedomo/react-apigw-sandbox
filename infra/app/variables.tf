@@ -19,3 +19,16 @@ variable "enable_error_endpoints" {
   type        = bool
   default     = false
 }
+
+variable "allowed_origins" {
+  description = "Hosting に加えて許可する Origin の一覧（完全一致。既定は localhost）"
+  type        = list(string)
+  default     = ["http://localhost:5173"]
+
+  validation {
+    condition = alltrue([
+      for origin in var.allowed_origins : can(regex("^https?://[A-Za-z0-9.-]+(:[0-9]+)?$", origin))
+    ])
+    error_message = "http(s)://host[:port] の一覧を指定してください。wildcard・パスは使用できません。"
+  }
+}

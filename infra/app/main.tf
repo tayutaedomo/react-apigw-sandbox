@@ -3,6 +3,7 @@
 # -----------------------------------------------------------------------------
 # プロファイルとリージョンは実行環境から取得する。ECR の state は共有しない。
 provider "aws" {}
+data "aws_region" "current" {}
 
 # ECR は別の state で管理するため、ここでは既存 repository を照会する。
 # API を削除してもイメージの保存先が削除されないよう、resource として作成しない。
@@ -13,6 +14,9 @@ data "aws_ecr_repository" "api" {
 # 関数・API・ログに共通の名前を使い、AWS 上で関連するリソースを識別しやすくする。
 locals {
   name = "react-apigw-sandbox-api"
+  # 同じ state 内の Hosting を参照し、Origin の手動受け渡しをなくす。
+  hosting_origin = "https://${aws_amplify_branch.sandbox.branch_name}.${aws_amplify_app.frontend.default_domain}"
+  cors_origins   = distinct(concat(var.allowed_origins, [local.hosting_origin]))
 }
 
 # -----------------------------------------------------------------------------
@@ -92,6 +96,8 @@ resource "aws_lambda_function" "api" {
     variables = {
       # Uvicorn と HTTP ログの出力レベルをアプリ側でも INFO に揃える。
       POWERTOOLS_LOG_LEVEL = "INFO"
+      # Hosting の Origin は自動で追加し、開発用 Origin と合わせて完全一致で許可する。
+      CORS_ALLOW_ORIGINS = jsonencode(local.cors_origins)
       # 検証時だけ意図的なエラー API を公開し、通常は登録しない。
       ENABLE_ERROR_ENDPOINTS = tostring(var.enable_error_endpoints)
       # Web Adapter の readiness 待機を初期化フェーズ内で行う。
@@ -224,4 +230,37 @@ resource "aws_api_gateway_stage" "sandbox" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   deployment_id = aws_api_gateway_deployment.api.id
   stage_name    = "sandbox"
+}
+
+# -----------------------------------------------------------------------------
+# 6. React の静的配信先
+# -----------------------------------------------------------------------------
+# Git と接続せず、ローカルで作成した dist を手動デプロイする静的 Hosting。
+# Terraform は配信先だけを作成し、ビルド・アップロード・公開を実行しない。
+resource "aws_amplify_app" "frontend" {
+  name                        = "react-apigw-sandbox-frontend"
+  platform                    = "WEB"
+  enable_auto_branch_creation = false
+
+  # SPA のページ URL を直接開いても index.html を返す。
+  # JS / CSS 等の拡張子を除外し、アセットを HTML に置き換えない。
+  # AWS の SPA 向け推奨例: https://docs.aws.amazon.com/amplify/latest/userguide/redirect-rewrite-examples.html
+  custom_rule {
+    source = "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>"
+    target = "/index.html"
+    status = "200"
+  }
+}
+
+# -----------------------------------------------------------------------------
+# 7. 手動デプロイの公開単位
+# -----------------------------------------------------------------------------
+# Amplify の branch は配信 URL の単位。Git ブランチの自動連携は行わない。
+# 固定の sandbox URL に、明示的にアップロードした成果物だけを公開する。
+resource "aws_amplify_branch" "sandbox" {
+  app_id            = aws_amplify_app.frontend.id
+  branch_name       = "sandbox"
+  stage             = "DEVELOPMENT"
+  framework         = "React"
+  enable_auto_build = false
 }

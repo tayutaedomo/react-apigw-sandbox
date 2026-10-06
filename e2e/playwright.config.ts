@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: '**/hosting.spec.ts',
   fullyParallel: true,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
@@ -10,7 +11,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'on',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // 検証の種類を実行結果にも表示する。HTTP はブラウザーを使わない。
+  projects: [
+    { name: 'browser-chromium', testMatch: '**/browser/*.spec.ts', use: { ...devices['Desktop Chrome'] } },
+    { name: 'http', testMatch: '**/http/*.spec.ts', use: { screenshot: 'off', trace: 'off' } },
+  ],
   webServer: [
     {
       cwd: fileURLToPath(new URL('../backend', import.meta.url)),

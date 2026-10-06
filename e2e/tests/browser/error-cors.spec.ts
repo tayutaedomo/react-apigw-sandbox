@@ -6,16 +6,11 @@
  *         未処理500の後も別の API を連続呼び出しできること。
  * 記録: 操作前後の PNG と、プリフライト後の送信有無を HTML レポートへ添付する。
  */
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { capture } from '../../helpers/capture';
+import { apiBaseUrl } from '../../helpers/endpoints';
 
-const apiBaseUrl = (process.env.AWS_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-
-async function capture(page: Page, testInfo: TestInfo, name: string) {
-  const path = testInfo.outputPath(`${name}.png`);
-  await page.screenshot({ path, fullPage: true });
-  await testInfo.attach(name, { path, contentType: 'image/png' });
-}
 
 test('未処理500の後もエラー応答と正常応答を連続して読み取れる', async ({ page }, testInfo) => {
   await page.goto('/');
@@ -73,6 +68,7 @@ for (const probe of cases) {
 }
 
 test('未許可 Origin ではサーバーが400を返しても本文を読み取れない', async ({ page }, testInfo) => {
+  test.skip(!!process.env.HOSTING_BASE_URL, '別ホスト名のローカル Vite を使うケース');
   // 同じ Vite を別ホスト名で開き、ページの Origin を変える。レスポンスは加工しない。
   await page.goto('http://127.0.0.1:5173');
   await page.getByLabel('検証ケース').selectOption('http-400');
@@ -94,6 +90,7 @@ for (const probe of [
   { id: 'preflight-method', label: '未許可メソッドの拒否', allowed: false, deniedOrigin: false },
 ]) {
   test(`プリフライト：${probe.label}と実リクエストの送信有無`, async ({ page, context }, testInfo) => {
+    test.skip(!!process.env.HOSTING_BASE_URL && probe.deniedOrigin, '別ホスト名のローカル Vite を使うケース');
     // CDP は Chromium が実際に送信した OPTIONS と本リクエストを観測するために使う。
     const session = await context.newCDPSession(page);
     await session.send('Network.enable');

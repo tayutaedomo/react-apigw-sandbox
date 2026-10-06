@@ -1,8 +1,19 @@
 # PoC の検証結果
 
-ローカルから AWS 上の API まで、確認済みの挙動と検証方法を記録しています。
+## 目次
 
-- 対象: React / FastAPI、CORS、コンテナ、ECR、Lambda / REST API。
+- [React と FastAPI の疎通](#react-と-fastapi-の疎通)
+- [基本的な CORS](#基本的な-cors)
+- [コンテナと構造化ログ](#コンテナと構造化ログ)
+- [ECR とイメージの登録](#ecr-とイメージの登録)
+- [Lambda と REST API](#lambda-と-rest-api)
+- [アプリのエラー時 CORS](#アプリのエラー時-cors)
+- [Amplify Hosting と手動デプロイ](#amplify-hosting-と手動デプロイ)
+- [未検証の範囲](#未検証の範囲)
+
+ローカルと Amplify Hosting から AWS 上の API まで、確認済みの挙動と検証方法を記録しています。
+
+- 対象: React / FastAPI、CORS、コンテナ、ECR、Lambda / REST API、Amplify Hosting。
 - 構成と操作手順: [ルート README](../README.md)から各ディレクトリへ移動できます。
 - 検証範囲: 各項目の結果と、末尾の未検証事項を参照してください。
 
@@ -124,6 +135,28 @@ FastAPI 全体を CORS とリクエストログで包み、未処理例外を含
 
 エラー本文の読み取りと CORS による拒否は確認済みです。Gateway 自身が生成するエラーは下記の未検証範囲です。
 
+## Amplify Hosting と手動デプロイ
+
+ビルド済み React を手動公開し、配信済み画面から別 Origin の AWS API を読み取れることを確認しています。
+
+| 検証内容 | 確認できたこと | 検証方法 |
+| --- | --- | --- |
+| 配信先の管理 | API と Hosting を app の同じ state で管理し、ECR は独立させられる | Terraform |
+| 手動公開 | ビルドとデプロイを分離し、ZIP のアップロード後に公開できる | 手動デプロイスクリプト |
+| 失敗時の動作 | アップロード失敗で公開を開始せず、一時 ZIP を削除する | ローカルスクリプトテスト |
+| 静的配信 | JS を正しい content-type で配信し、存在しない JS は404になる | HTTP 結合テスト |
+| SPA の直接アクセス | ページ URL を直接開いても React の画面と API 呼び出しが動く | Playwright |
+| 許可 Origin | Hosting の Origin を自動追加し、localhost と Amplify から正常・エラー応答を読める | API テスト / Playwright |
+| エラーと追跡情報 | 配信済み画面から4xx・5xx、Request ID、429の Retry-After を読める | Playwright |
+| プリフライト | 配信先でも GET許可・未許可ヘッダー／メソッド拒否を確認できる | Playwright / CDP |
+| 再試行 | 配信済み画面でも通信失敗・CORS拒否の後に読み取りを再試行できる | Playwright |
+
+- 配信経路: ブラウザー → REST API → Lambda / Web Adapter / FastAPI。Vite プロキシは使いません。
+- 未許可 Origin の拒否: ローカル画面から AWS API を使って確認。Hosting モードの別ホスト名を使うケースは対象外。
+- 操作手順: [アプリのリソース作成](../infra/app/README.md)、[ビルドと手動公開](../frontend/README.md#amplify-への手動デプロイ)、[配信済み画面のテスト](../e2e/README.md#amplify-配信済み画面のテスト)。
+
+成果物の公開と AWS リソースの作成を分離し、実際に配信された React からの CORS を検証しています。
+
 ## 未検証の範囲
 
-Gateway 自身のエラー時 CORS、Lambda 統合の障害、Amplify 上のブラウザー疎通、認証・credentials は未検証です。
+Gateway 自身のエラー時 CORS、Lambda 統合の障害、認証・credentials は未検証です。

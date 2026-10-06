@@ -1,13 +1,21 @@
-# E2E テスト
+# ブラウザー・HTTP 結合テスト
+
+## 目次
+
+- [概要](#概要)
+- [開発環境](#開発環境)
+- [テストの実行](#テストの実行)
+- [設定と失敗時の確認](#設定と失敗時の確認)
+- [操作のまとめ](#操作のまとめ)
 
 ## 概要
 
-Playwright の Chromium で、React から実際の FastAPI を呼び出す動作を確認します。
+Playwright で、画面操作による E2E と、ブラウザーを使わない HTTP 結合を分けて確認します。
 
 - 実 API 疎通: 別 Origin の通信と Hello World の表示。
 - 通信失敗: エラー表示と、接続回復後の再試行。
 - エラー時 CORS: 4xx・5xxの読み取り、Origin拒否、プリフライトと再試行。
-- サーバー起動: Playwright が frontend と backend を自動起動。
+- サーバー起動: ローカルでは Playwright が frontend と backend を自動起動。Hosting モードは配信済み画面を使用。
 
 以下のコマンドは、すべて `e2e/` 内で実行します。
 
@@ -37,7 +45,21 @@ npm run browser:install
 
 ## テストの実行
 
-### 全テスト
+### テストの種類
+
+配信後の検証でも、HTTP 応答だけを見るケースを E2E と呼びません。
+
+| 種類 | 確認する範囲 | 画面記録 |
+| --- | --- | --- |
+| ブラウザー E2E | 画面操作 → API 呼び出し → 結果表示 | 操作前後の PNG |
+| ブラウザー結合 | CORS・プリフライトの実際の判定 | 操作前後の PNG・通信観測 |
+| HTTP 結合 | API と Lambda、Hosting の配信動作 | 画面なし |
+
+- 配置: `tests/browser` と `tests/http`。
+- 共通設定: 同じ実環境へ接続するため、接続先と Playwright の runner を共有。
+- 補助確認: ブラウザーテスト内の `page.request` は CORS 拒否の根拠を確認する用途。主な検証対象は画面の動作。
+
+### ローカルのテスト
 
 手動起動した frontend と backend は停止してから実行してください。
 
@@ -85,16 +107,36 @@ npm run test:container
 ローカル frontend から、作成済みの API Gateway REST API を呼び出します。
 
 ```sh
-AWS_API_BASE_URL="$(terraform -chdir=../infra/api output -raw api_base_url)" npm run test:aws
+AWS_API_BASE_URL="$(terraform -chdir=../infra/app output -raw api_base_url)" npm run test:aws
 ```
 
-- 前提: [API の Terraform](../infra/api/README.md)を適用し、`enable_error_endpoints=true` に設定済み。
+- 前提: [API の Terraform](../infra/app/README.md)を適用し、`enable_error_endpoints=true` に設定済み。
 - 起動: frontend のみ。API URL は環境変数で渡し、実 URL をソースに保存しません。
 - サーバー: ローカル backend は起動しません。
 - ケース: 疎通・再試行・呼び出し ID と、エラー時 CORS・プリフライトを確認。
-- エラー API を無効のまま疎通だけ検証: `npm run test:aws -- tests/hello.spec.ts`。
+- エラー API を無効のまま疎通だけ検証: `npm run test:aws -- hello.spec.ts api.spec.ts`。
 - ローカルモード: AWS 専用ケースは skip。
 - 実行結果: 通常モードと同じ場所へ保存するため、前回のレポートを上書きします。
+
+### Amplify 配信済み画面のテスト
+
+Vite を起動せず、Amplify に公開したビルドから AWS の API を呼び出します。
+
+```sh
+AWS_API_BASE_URL="$(terraform -chdir=../infra/app output -raw api_base_url)" \
+HOSTING_BASE_URL="$(terraform -chdir=../infra/app output -raw hosting_url)" \
+  npm run test:hosting
+```
+
+- 前提: [frontend の手動デプロイ](../frontend/README.md#amplify-への手動デプロイ)を完了。app の Terraform が Hosting の Origin を許可。エラー API を有効化。
+- 起動: ローカルの frontend・backend は起動しません。
+- 接続先: ビルドへ埋め込んだ API URL と `AWS_API_BASE_URL` を一致させます。
+- 検証: 正常応答、通信失敗後の再試行、4xx・5xx本文と相関 ID、429の Retry-After、プリフライトの許可・ヘッダー／メソッド拒否。
+- 静的配信: JS の content-type、存在しない JS の404、ページ URL の直接アクセス。
+- 未許可 Origin: `127.0.0.1:5173` を使う2ケースは skip。別 Origin の拒否はローカル・`test:aws` で確認。
+- 画面記録: 操作の節目とテスト終了時に PNG を保存。
+
+配信済みの成果物を検証するため、ローカルのソース変更は再ビルド・再公開後に反映されます。
 
 ### エラー時 CORS のケース
 
@@ -111,11 +153,16 @@ AWS_API_BASE_URL="$(terraform -chdir=../infra/api output -raw api_base_url)" npm
 
 プリフライトが拒否された場合、API の400本文を画面で読めるわけではありません。ブラウザーは本リクエストを送らず、fetch を失敗させます。
 
-### テストを指定して実行
+### 種類・ケースを指定して実行
 
 ```sh
-npm test -- tests/hello.spec.ts
+npm test -- tests/browser/hello.spec.ts
 ```
+
+- ブラウザーだけ: `npm run test:browser`。
+- 配信後の HTTP 結合だけ: 接続先の環境変数を指定して `npm run test:http:hosting`。
+- Hosting のブラウザーだけ: `npm run test:hosting -- --project=browser-chromium`。
+- 実行結果の表示: `browser-chromium` と `http` の project 名で区別。
 
 ## 設定と失敗時の確認
 
@@ -124,17 +171,24 @@ npm test -- tests/hello.spec.ts
 - `playwright.config.ts`: Chromium、サーバーの起動方法、接続先を定義。
 - `playwright.container.config.ts`: API の起動を Docker に切り替え。
 - `playwright.aws.config.ts`: API を AWS endpoint に切り替え、frontend のみ起動。
+- `playwright.hosting.config.ts`: Amplify 配信済みの画面を検証。ローカルサーバーは起動しない。
 - `scripts/run-api-container.sh`: コンテナを起動し、終了・中断時に削除。
-- `tests/hello.spec.ts`: 疎通と通信失敗・再試行のテスト。
-- `tests/error-cors.spec.ts`: エラー本文・相関 ID、Origin・プリフライトと再試行のテスト。
+- `tests/browser/hello.spec.ts`: 画面の疎通と通信失敗・再試行。
+- `tests/browser/error-cors.spec.ts`: ブラウザーのエラー本文・相関 ID、Origin・プリフライトと再試行。
+- `tests/browser/hosting.spec.ts`: 配信済み SPA の直接アクセスと API 呼び出し。
+- `tests/http/api.spec.ts`: AWS API の本文・CORS ヘッダー・Lambda Request ID。
+- `tests/http/hosting.spec.ts`: 配信ファイルの content-type・本文と未存在 JS の404。
+- `helpers/capture.ts`: ブラウザーの操作前後の PNG 保存と添付を共通化。
+- `helpers/endpoints.ts`: 両種類のテストで使う接続先を共通化。
 - `test-results/`: テストの出力。Git 管理の対象外。
 
 ### 画面キャプチャと HTML レポート
 
-成功時も画面を保存します。HTML レポートの添付画像で操作前後を確認できます。
+ブラウザーテストは成功時も画面を保存します。画面操作のない HTTP 結合テストはキャプチャ対象外です。
 
 - 操作の節目: 初期表示、API 成功、通信失敗、再試行成功で全画面 PNG を保存。
-- テスト終了時: Playwright の `screenshot: 'on'` で成功・失敗とも自動保存。
+- ブラウザーテスト終了時: Playwright の `screenshot: 'on'` で成功・失敗とも自動保存。
+- HTTP 結合テスト: ブラウザーを起動せず、ステータス・ヘッダー・本文で検証。画像・ブラウザートレースは保存しません。
 - PNG: `test-results/` 内のテスト別ディレクトリ。
 - HTML レポート: `playwright-report/`。画面キャプチャを添付。
 - 保存先: 通常・コンテナの実行で共通。次の実行時に前の結果を上書きします。
