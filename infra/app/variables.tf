@@ -32,3 +32,9 @@ variable "allowed_origins" {
     error_message = "http(s)://host[:port] の一覧を指定してください。wildcard・パスは使用できません。"
   }
 }
+
+variable "enable_gateway_error_cors" {
+  description = "必須クエリ欠落の Gateway エラーに Hosting 向け CORS を付与する（false は比較検証用）"
+  type        = bool
+  default     = true
+}

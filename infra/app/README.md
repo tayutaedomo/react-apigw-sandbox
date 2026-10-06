@@ -20,7 +20,7 @@ Lambda・REST API・Amplify Hosting を同じ Terraform state で管理し、ECR
 - ECR: [専用 state](../ecr/README.md)の既存 repository を照会。ここでは作成・削除しません。
 - 定義: [main.tf](main.tf)に実行環境・ログと権限・Lambda・Gateway・Hosting をセクション別に配置。
 - ビルド・公開: Terraform に含めず、backend / frontend の独立スクリプトで実行。
-- 認証・credentials: 未導入。Gateway 自身のエラー時 CORS は後続の検証対象。
+- 認証・credentials: 未導入。Gateway の必須クエリ欠落による400は Hosting 向け CORS を設定。
 
 以下のコマンドは、特記がなければ `infra/app/` 内で実行します。
 
@@ -62,11 +62,14 @@ export AWS_PROFILE='<使用するプロファイル>'
 | `image_uri` | 実行するコンテナ | `image-uri.txt` または plan スクリプトの引数。digest 必須 |
 | `repository_name` | 既存 ECR の照会 | `react-apigw-sandbox-api` |
 | `enable_error_endpoints` | 意図的なエラー API の有効化 | `false`。検証で有効にした状態は個別 tfvars で継続保持 |
+| `enable_gateway_error_cors` | Gateway の必須クエリ欠落400への CORS | `true`。`false` は設定前後の比較用 |
 | `allowed_origins` | Hosting 以外に許可する Origin | `http://localhost:5173`。Hosting は自動追加 |
 
 - `allowed_origins = []`: Hosting だけを許可。
 - Origin の形式: `http(s)://host[:port]`。wildcard・パス・末尾 `/` は使用しません。
 - Lambda: 許可一覧を `CORS_ALLOW_ORIGINS` の JSON 配列で渡します。
+- Gateway: 必須クエリ欠落の400と検証用 MOCK 応答は Hosting の1 Origin のみ許可。`allowed_origins` は適用しません。
+- Gateway の検証: [構成・CORS の図解と比較手順](../../docs/gateway-cors.md)。Lambda・イメージ・画面の更新は不要。
 - plan スクリプト: digest と変数を読み込み、`app.tfplan` に保存。apply は別操作。
 - Gateway: API 定義を変更した場合に deployment を更新。イメージ・Lambda 環境変数だけの変更では再デプロイしません。
 - Hosting: app の作成・apply は成果物を公開しません。
