@@ -73,6 +73,58 @@ Lambda 上の Web Adapter を経由し、React から Hello World を取得で�
 | 起動ログ | Uvicorn の起動ログを CloudWatch 上で JSON として取得できる | ログ解析 |
 | Request ID | HTTP ログの Lambda ID がプラットフォームログの ID と一致する | ログ解析 |
 
+## アプリのエラー時 CORS
+
+FastAPI 全体を CORS とリクエストログで包み、未処理例外を含むエラー応答を検証します。
+
+| 検証内容 | 確認できたこと | 検証方法 |
+| --- | --- | --- |
+| 標準のエラー | 404・405・422でステータスと本文を読める | API テスト / Playwright |
+| 明示的なエラー | 400・409・418・429・500・502・503・504を読める | API テスト / Playwright |
+| 未処理例外・応答検証エラー | 500にも CORS と相関 ID が付き、内部情報を本文へ出さない | API テスト / Playwright |
+| 相関 ID | 応答の ID とログが一致し、JavaScript からヘッダーを読める | API テスト / Playwright |
+| 429の再試行情報 | JavaScript から `Retry-After: 1` を読める | API テスト / Playwright |
+| 未許可 Origin | サーバーはエラーを返すが、ブラウザーは本文を読み取れない | API テスト / Playwright |
+| Originなし | エラー本文を返し、CORS 許可ヘッダーを付けない | API テスト |
+| プリフライト許可 | GETを許可し、その後の本リクエストのエラー本文を読める | API テスト / Playwright・CDP |
+| プリフライト拒否 | 未許可 Origin・ヘッダー・メソッドを拒否し、本リクエストを送らない | API テスト / Playwright・CDP |
+| 拒否後の再試行 | 許可されるケースへ切り替えると本文を読める | Playwright |
+| 未処理500後の連続呼び出し | 500・400・正常応答を続けて読める | Playwright |
+| 検証 API の切り替え | 既定では `/errors/` を登録せず、有効化すると意図的なエラーを再現できる | API テスト |
+
+- ローカル: API テスト89件、Playwright21件が成功（AWS 専用1件は skip）。
+- コンテナ: Playwright21件が成功（AWS 専用1件は skip）。
+- AWS: Playwright22件が成功。Lambda 更新後の Terraform plan は差分なし。
+- CloudWatch: 429・未処理500・応答検証500のステータスと相関 ID を照合。
+- 画面記録: ケース選択・応答表示・拒否・再試行の PNG をレポートに添付。
+- ログ: 処理済み HTTP エラーは INFO、未処理例外・応答検証エラーは ERROR。
+- プリフライト: CORS が直接応答するため、アプリのリクエストログと相関 ID は付けない。
+- 502・504・429: この項目は FastAPI が意図的に返す応答。Gateway の統合障害・タイムアウト・スロットリングとは別の検証。
+- 認証・credentials: 未導入。401・403や credentials の許可は対象外。
+
+### AWS で観測した接続再利用の問題
+
+未処理500の直後に別の API を呼ぶと、Web Adapter の接続リセットにより Gateway が502を返す挙動を観測しました。
+
+- アプリ側: Uvicorn は例外が再送出されると接続を閉じる。
+- AWS側: 失敗した呼び出しは FastAPI の HTTP ログがなく、Adapter に `Connection reset by peer` が記録された。
+- 対応: `AWS_LWA_POOL_IDLE_TIMEOUT_SECONDS=0` で Adapter の接続再利用を無効化。
+- 判断: 例外の再送出と ERROR ログを維持し、毎回の TCP 接続コストを許容。性能への影響は未測定。
+- 回帰検証: 未処理500 → 応答検証500 → 明示的400を2回繰り返し、その後に正常応答を取得。
+
+### AWS で観測したログ出力の遅延
+
+未処理500の ERROR ログが応答直後に見つからず、後続の正常呼び出しの後に出力されるケースを観測しました。
+
+- ログ処理: FastAPI が500本文を送った後に例外を再送出し、外側のミドルウェアが記録する。
+- 推測: Adapter が応答を返した後の Lambda 停止と、後続呼び出しでの後処理再開と整合する。CloudWatch 自体の配信遅延もあるため、停止時点までは測定していない。
+- 相関 ID: 遅れて出力されたログでも、元の500応答と Lambda プラットフォームの ID に一致。
+- 処理時間: 最終本文送信前に確定し、後続呼び出しまでの待機を除外。API テストで60秒の待機を模擬して検証。
+- 限界: 応答直後のログ出力は保証しない。後続実行がない場合の出力保証は未検証。
+- 仕様の参照: [Lambda の実行環境と未完了処理の再開](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html)。
+
+エラー本文の読み取りと CORS による拒否は確認済みです。Gateway 自身が生成するエラーは下記の未検証範囲です。
+
 ## 未検証の範囲
 
-Gateway 自身のエラー時 CORS、広範囲の障害、Amplify 上のブラウザー疎通は未検証です。
+Gateway 自身のエラー時 CORS、Lambda 統合の障害、Amplify 上のブラウザー疎通、認証・credentials は未検証です。

@@ -27,3 +27,9 @@ button:disabled {
 [role='alert'] {
   color: #a12121;
 }
+
+/* 422の長い JSON も画面とキャプチャ内に収め、本文を読み取れるようにする。 */
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

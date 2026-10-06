@@ -103,6 +103,8 @@ ENABLE_ERROR_ENDPOINTS=true docker compose up --no-build
 - 未処理例外: 本文は `Internal Server Error`。詳細とスタックトレースは ERROR ログへ記録。
 - 明示的な HTTP エラー: 処理済みレスポンスとして INFO ログにステータスを記録。
 - プリフライト: 外側の CORS が直接応答するため、リクエストログと相関 ID の対象外。
+- 処理時間: 最終本文を送る直前に確定し、送信後の Lambda の停止時間を含めない。
+- ログ出力時期: AWS では500応答後の ERROR ログが、後続呼び出しで出力されるケースを観測。詳細は [PoC の記録](../docs/poc.md#aws-で観測したログ出力の遅延)を参照。
 - credentials・認証: この検証では追加しない。
 
 API テストでヘッダーとログを、Playwright でブラウザーの読み取りと送信有無を確認します。

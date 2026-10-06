@@ -11,6 +11,7 @@
 - 並行処理: リクエストごとの ID とステータスが一致。
 - Lambda: 呼び出し ID の継承、コンテキスト欠落・破損時の UUID フォールバック。
 - 環境への非依存: ローカルでも有効なコンテキストの ID を利用。
+- 応答後の停止: 500後のログ出力が遅れても、待機時間を duration_ms に含めない。
 """
 
 import asyncio
@@ -168,3 +169,33 @@ def test_valid_context_is_used_without_runtime_environment(log_stream):
     assert record["correlation_id"] == supplied_id
     assert record["correlation_id"] == response.headers["x-request-id"]
     UUID(record["correlation_id"])
+
+
+def test_duration_does_not_include_pause_after_response(log_stream, monkeypatch):
+    # Lambda の停止を待たず、応答送信後に時計が進む ASGI send で再現する。
+    clock = 0.0
+    monkeypatch.setattr(request_logging, "perf_counter", lambda: clock)
+
+    async def failing_app(scope, receive, send):
+        nonlocal clock
+        clock = 0.025
+        await send({"type": "http.response.start", "status": 500, "headers": []})
+        await send({"type": "http.response.body", "body": b"Internal Server Error"})
+        raise RuntimeError("error after response")
+
+    async def send(message):
+        nonlocal clock
+        if message["type"] == "http.response.body":
+            clock += 60
+
+    async def receive():
+        return {"type": "http.request", "body": b""}
+
+    with pytest.raises(RuntimeError, match="error after response"):
+        asyncio.run(RequestLoggingMiddleware(failing_app)(
+            {"type": "http", "method": "GET", "path": "/failure", "headers": []}, receive, send,
+        ))
+    [record] = read_logs(log_stream)
+    assert record["status_code"] == 500
+    assert record["level"] == "ERROR"
+    assert record["duration_ms"] == 25

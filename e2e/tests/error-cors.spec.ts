@@ -3,6 +3,7 @@
  * 方針: 応答をモックせず、HTTP エラーの読み取りと fetch の拒否を区別する。
  * ケース: 404/405/422、明示的4xx/5xx、未処理・応答検証500、Origin拒否、
  *         プリフライトの許可・ヘッダー拒否・メソッド拒否、再試行。
+ *         未処理500の後も別の API を連続呼び出しできること。
  * 記録: 操作前後の PNG と、プリフライト後の送信有無を HTML レポートへ添付する。
  */
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
@@ -15,6 +16,30 @@ async function capture(page: Page, testInfo: TestInfo, name: string) {
   await page.screenshot({ path, fullPage: true });
   await testInfo.attach(name, { path, contentType: 'image/png' });
 }
+
+test('未処理500の後もエラー応答と正常応答を連続して読み取れる', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await capture(page, testInfo, '01-initial');
+  let step = 1;
+  for (let round = 0; round < 2; round++) {
+    for (const probe of [
+      { id: 'unhandled', path: '/errors/unhandled', status: 500 },
+      { id: 'response-validation', path: '/errors/response-validation', status: 500 },
+      { id: 'http-400', path: '/errors/http/400', status: 400 },
+    ]) {
+      await page.getByLabel('検証ケース').selectOption(probe.id);
+      const responsePromise = page.waitForResponse(`${apiBaseUrl}${probe.path}`);
+      await page.getByRole('button', { name: 'エラー API を呼び出す' }).click();
+      expect((await responsePromise).status()).toBe(probe.status);
+      await expect(page.getByText(`HTTP ステータス: ${probe.status}`, { exact: true })).toBeVisible();
+      await expect(page.getByRole('alert')).toHaveCount(0);
+      await capture(page, testInfo, `${++step}-readable`);
+    }
+  }
+  await page.getByRole('button', { name: 'API を呼び出す', exact: true }).click();
+  await expect(page.getByText('API: Hello World', { exact: true })).toBeVisible();
+  await capture(page, testInfo, '08-hello-recovered');
+});
 
 const cases = [
   { id: 'not-found', label: '存在しないパス', status: 404 },
