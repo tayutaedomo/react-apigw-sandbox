@@ -38,6 +38,33 @@
 - Terraform apply: `dist/` を公開しません。Amplify の手動公開が別途必要です。
 - 既に動いているこの PoC: 初回構築ではなく、更新対象に対応する手順を選びます。
 
+### 図の見方と管理範囲
+
+各ケースの図は同じ配置です。**青の「対象」が今回実施する範囲、橙の「条件付き」が変更内容に応じて実施する範囲、灰が更新せず維持・参照する範囲**です。
+
+- 上段: API イメージのビルド → ECR への push → Lambda の実行イメージ。
+- 下段: React のビルド → `dist/` → Amplify の手動公開。
+- Terraform app: Lambda・API Gateway・Hosting の設定を管理。apply しても、全リソースを毎回変更するわけではありません。
+- ECR: `infra/ecr` が別 state で管理。初回は repository を作成し、更新では既存 repository へ push。
+- 実線: 成果物の受け渡し。ECR の digest は Terraform に渡して Lambda を更新し、push だけでは切り替わりません。
+- 点線: Terraform の設定・更新の対象。ブラウザーの通信経路を表す図ではありません。
+- 色が分からない場合も、ノードの「対象」「条件付き」で区別できます。
+
+全体の関係は次のとおりです。ケース別の図では、ここから必要な範囲だけを強調します。
+
+```mermaid
+flowchart LR
+    B["API イメージ<br/>ビルド"] -->|push| E["ECR"] -->|digest| L["Lambda"]
+    F["React ビルド"] --> D["dist"] -->|手動公開| H["Amplify Hosting"]
+    T["Terraform app<br/>plan・apply"] -.->|設定・更新| L
+    T -.->|設定・更新| G["API Gateway"]
+    T -.->|設定・更新| H
+    classDef target fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+    classDef optional fill:#ffedd5,stroke:#c2410c,stroke-width:2px,color:#111827
+    classDef keep fill:#f3f4f6,stroke:#9ca3af,color:#4b5563
+    class B,E,L,F,D,H,T,G keep
+```
+
 ## 共通の準備
 
 ### 実行場所と前提
@@ -88,6 +115,23 @@ aws lambda get-function-configuration \
 設定を持たず既定値だけで plan すると、エラー API は無効になります。更新前に継続する設定を明示します。
 
 ## 初回に環境全体を構築する
+
+### 対応範囲
+
+全範囲を構築します。ECR の repository 作成は `infra/ecr`、API と Hosting の作成は `infra/app` で実施します。
+
+```mermaid
+flowchart LR
+    B["【対象】<br/>API イメージ<br/>ビルド"] -->|push| E["【対象】<br/>ECR"] -->|digest| L["【対象】<br/>Lambda"]
+    F["【対象】<br/>React ビルド"] --> D["【対象】<br/>dist"] -->|手動公開| H["【対象】<br/>Amplify Hosting"]
+    T["【対象】<br/>Terraform app<br/>plan・apply"] -.->|設定・更新| L
+    T -.->|設定・更新| G["【対象】<br/>API Gateway"]
+    T -.->|設定・更新| H
+    classDef target fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+    classDef optional fill:#ffedd5,stroke:#c2410c,stroke-width:2px,color:#111827
+    classDef keep fill:#f3f4f6,stroke:#9ca3af,color:#4b5563
+    class B,E,L,F,D,H,T,G target
+```
 
 ### 対象と前提
 
@@ -143,6 +187,24 @@ node frontend/scripts/deploy-hosting.mjs
 初回だけ ECR を作成し、以後は変更対象ごとの更新手順を使います。
 
 ## バックエンドだけを更新する
+
+### 対応範囲
+
+API イメージから Lambda までが対象です。app の apply は必要ですが、Gateway の定義と配信済み画面は維持します。
+
+```mermaid
+flowchart LR
+    B["【対象】<br/>API イメージ<br/>ビルド"] -->|push| E["【対象】<br/>ECR"] -->|digest| L["【対象】<br/>Lambda"]
+    F["React ビルド"] --> D["dist"] -->|手動公開| H["Amplify Hosting"]
+    T["【対象】<br/>Terraform app<br/>plan・apply"] -.->|設定・更新| L
+    T -.->|設定・更新| G["API Gateway"]
+    T -.->|設定・更新| H
+    classDef target fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+    classDef optional fill:#ffedd5,stroke:#c2410c,stroke-width:2px,color:#111827
+    classDef keep fill:#f3f4f6,stroke:#9ca3af,color:#4b5563
+    class B,E,L,T target
+    class F,D,H,G keep
+```
 
 ### 対象と前提
 
@@ -200,6 +262,24 @@ API 更新はビルド → push → plan → apply。push だけでは更新完�
 
 ## フロントエンドだけを更新する
 
+### 対応範囲
+
+React のビルドと公開だけが対象です。Terraform の output は接続先の参照に使い、apply は実行しません。
+
+```mermaid
+flowchart LR
+    B["API イメージ<br/>ビルド"] -->|push| E["ECR"] -->|digest| L["Lambda"]
+    F["【対象】<br/>React ビルド"] --> D["【対象】<br/>dist"] -->|手動公開| H["【対象】<br/>Amplify Hosting"]
+    T["Terraform app<br/>plan・apply"] -.->|設定・更新| L
+    T -.->|設定・更新| G["API Gateway"]
+    T -.->|設定・更新| H
+    classDef target fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+    classDef optional fill:#ffedd5,stroke:#c2410c,stroke-width:2px,color:#111827
+    classDef keep fill:#f3f4f6,stroke:#9ca3af,color:#4b5563
+    class F,D,H target
+    class B,E,L,T,G keep
+```
+
 ### 対象と前提
 
 React・CSS・npm 依存を変更します。API と AWS の設定が変わらなければ、Docker と Terraform apply は不要です。
@@ -250,6 +330,25 @@ tar -czf .deployment/last-good-frontend.tar.gz -C frontend/dist .
 
 ## AWS の設定だけを変更する
 
+### 対応範囲
+
+plan・apply が対象です。橙の3リソースのうち、実際に変更した設定だけを更新し、API イメージと静的成果物は維持します。
+
+```mermaid
+flowchart LR
+    B["API イメージ<br/>ビルド"] -->|push| E["ECR"] -->|digest| L["【条件付き】<br/>Lambda"]
+    F["React ビルド"] --> D["dist"] -->|手動公開| H["【条件付き】<br/>Amplify Hosting"]
+    T["【対象】<br/>Terraform app<br/>plan・apply"] -.->|設定・更新| L
+    T -.->|設定・更新| G["【条件付き】<br/>API Gateway"]
+    T -.->|設定・更新| H
+    classDef target fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+    classDef optional fill:#ffedd5,stroke:#c2410c,stroke-width:2px,color:#111827
+    classDef keep fill:#f3f4f6,stroke:#9ca3af,color:#4b5563
+    class T target
+    class L,G,H optional
+    class B,E,F,D keep
+```
+
 ### 対象と前提
 
 Lambda のメモリ・タイムアウト・ログ設定、追加 Origin、エラー API の切り替え、Gateway の定義、Hosting の rewrite を変更します。
@@ -289,6 +388,24 @@ terraform -chdir=infra/app apply app.tfplan
 
 ## バックエンドと画面を両方更新する
 
+### 対応範囲
+
+API の更新を先に確認し、その後に画面を公開します。Gateway 定義も変更する場合は、その変更を同じ app の plan で確認します。
+
+```mermaid
+flowchart LR
+    B["【対象】<br/>API イメージ<br/>ビルド"] -->|push| E["【対象】<br/>ECR"] -->|digest| L["【対象】<br/>Lambda"]
+    F["【対象】<br/>React ビルド"] --> D["【対象】<br/>dist"] -->|手動公開| H["【対象】<br/>Amplify Hosting"]
+    T["【対象】<br/>Terraform app<br/>plan・apply"] -.->|設定・更新| L
+    T -.->|設定・更新| G["API Gateway"]
+    T -.->|設定・更新| H
+    classDef target fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+    classDef optional fill:#ffedd5,stroke:#c2410c,stroke-width:2px,color:#111827
+    classDef keep fill:#f3f4f6,stroke:#9ca3af,color:#4b5563
+    class B,E,L,T,F,D,H target
+    class G keep
+```
+
 ### 対象と前提
 
 API の仕様変更に合わせて画面も変更する場合です。個別の更新を API → 画面の順に実行します。
@@ -306,6 +423,25 @@ API の仕様変更に合わせて画面も変更する場合です。個別の�
 各手順の digest・画面保存も実施します。画面と API を同時に切り替える仕組みはありません。
 
 ## API の接続先を変更する
+
+### 対応範囲
+
+必須の範囲は画面の再ビルドと公開です。橙は API リソースを変更して URL を変える場合で、既存の別 API へ向けるだけなら参照・確認のみです。API コードの変更も必要な場合はバックエンド更新を組み合わせます。
+
+```mermaid
+flowchart LR
+    B["API イメージ<br/>ビルド"] -->|push| E["ECR"] -->|digest| L["【条件付き】<br/>Lambda"]
+    F["【対象】<br/>React ビルド<br/>API URL を埋め込む"] --> D["【対象】<br/>dist"] -->|手動公開| H["【対象】<br/>Amplify Hosting"]
+    T["【条件付き】<br/>Terraform app<br/>plan・apply"] -.->|設定・更新| L
+    T -.->|設定・更新| G["【条件付き】<br/>API Gateway"]
+    T -.->|設定・更新| H
+    classDef target fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+    classDef optional fill:#ffedd5,stroke:#c2410c,stroke-width:2px,color:#111827
+    classDef keep fill:#f3f4f6,stroke:#9ca3af,color:#4b5563
+    class F,D,H target
+    class T,G,L optional
+    class B,E keep
+```
 
 ### 対象と前提
 
@@ -344,6 +480,24 @@ node frontend/scripts/deploy-hosting.mjs
 
 ## 同じ成果物をもう一度公開する
 
+### 対応範囲
+
+確認済み dist から Hosting への公開だけが対象です。API と React は再ビルドせず、Terraform apply も不要です。
+
+```mermaid
+flowchart LR
+    B["API イメージ<br/>ビルド"] -->|push| E["ECR"] -->|digest| L["Lambda"]
+    F["React ビルド"] --> D["【対象】<br/>確認済み dist"] -->|手動公開| H["【対象】<br/>Amplify Hosting"]
+    T["Terraform app<br/>plan・apply"] -.->|設定・更新| L
+    T -.->|設定・更新| G["API Gateway"]
+    T -.->|設定・更新| H
+    classDef target fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+    classDef optional fill:#ffedd5,stroke:#c2410c,stroke-width:2px,color:#111827
+    classDef keep fill:#f3f4f6,stroke:#9ca3af,color:#4b5563
+    class D,H target
+    class B,E,L,F,T,G keep
+```
+
 ### 対象と手順
 
 公開処理の再実行等で、確認済みの同じ `frontend/dist/` をもう一度公開します。
@@ -360,6 +514,24 @@ node frontend/scripts/deploy-hosting.mjs
 再公開するのは指定した成果物です。Git の現在のコードを自動で公開する処理ではありません。
 
 ## 以前のバージョンへ切り戻す
+
+### 対応範囲
+
+API を戻す場合は ECR の保存済み digest を参照して Lambda を更新します。画面を戻す場合は保存した dist を公開します。橙の経路から戻す対象を選び、どちらも再ビルドしません。設定自体を戻す場合は設定変更の手順を使います。
+
+```mermaid
+flowchart LR
+    B["API イメージ<br/>ビルド"] -->|push| E["【条件付き】<br/>ECR<br/>保存済み digest を参照"] -->|digest| L["【条件付き】<br/>Lambda"]
+    F["React ビルド"] --> D["【条件付き】<br/>保存済み dist を復元"] -->|手動公開| H["【条件付き】<br/>Amplify Hosting"]
+    T["【条件付き】<br/>Terraform app<br/>plan・apply"] -.->|設定・更新| L
+    T -.->|設定・更新| G["API Gateway"]
+    T -.->|設定・更新| H
+    classDef target fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+    classDef optional fill:#ffedd5,stroke:#c2410c,stroke-width:2px,color:#111827
+    classDef keep fill:#f3f4f6,stroke:#9ca3af,color:#4b5563
+    class E,L,T,D,H optional
+    class B,F,G keep
+```
 
 ### API の切り戻し
 
@@ -407,6 +579,25 @@ node frontend/scripts/deploy-hosting.mjs
 切り戻しは API の digest、画面の成果物、AWS の設定を分けて判断します。
 
 ## 途中で失敗した場合に再開する
+
+### 再開する範囲
+
+失敗した工程を選び、その工程と後続だけを実施します。Terraform apply の失敗では、現在の state から新しく plan します。
+
+```mermaid
+flowchart TD
+    S["失敗した工程を確認"] --> B["API / React のビルド失敗"]
+    S --> P["ECR push の失敗"]
+    S --> T["Terraform の失敗"]
+    S --> H["Amplify の失敗・待機上限"]
+    B --> BR["修正して再ビルド<br/>成功後に配布・適用へ"]
+    P --> PR["ビルド済みイメージを再 push<br/>成功後に digest で apply"]
+    T --> TR["入力・state を確認<br/>新しい plan で再評価・apply"]
+    H --> HR["ジョブの状態を確認"]
+    HR --> OK["成功済みなら検証へ"]
+    HR --> WAIT["実行中なら完了を確認"]
+    HR --> FAIL["失敗なら原因を修正し<br/>再公開または切り戻し"]
+```
 
 失敗した工程から再開します。成功済みの工程まで毎回やり直す必要はありません。
 
