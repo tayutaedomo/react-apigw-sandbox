@@ -10,7 +10,8 @@
     "test": "playwright test",
     "test:container": "playwright test --config playwright.container.config.ts",
     "browser:install": "playwright install chromium",
-    "test:aws": "playwright test --config playwright.aws.config.ts"
+    "test:aws": "playwright test --config playwright.aws.config.ts",
+    "test:hosting": "playwright test --config playwright.hosting.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0"

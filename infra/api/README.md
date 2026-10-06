@@ -16,7 +16,7 @@ API Gateway REST API から、コンテナ方式の Lambda 上の FastAPI を呼
 - API: Regional、ステージ名 `sandbox`。
 - ログ: CloudWatch に7日保持。アプリ・Uvicorn・Lambda のプラットフォームログを JSON で記録。
 - 認証: この段階は未導入。
-- CORS: 現在の FastAPI 設定で `http://localhost:5173` を許可。credentials は不許可。
+- CORS: `allowed_origins` で localhost と配信先 Origin を指定。credentials は不許可。
 - Gateway 自身のエラー時 CORS・広範囲の障害検証: 後続フェーズの対象。
 
 以下のコマンドは、特記がなければ `infra/api/` 内で実行します。
@@ -93,6 +93,27 @@ terraform apply api.tfplan
 - Gateway deployment: Lambda 環境変数とイメージだけの更新では作り直さない。
 
 有効化は Lambda の設定として管理し、Docker イメージの再ビルドなしで切り替えられます。
+
+### 配信先 Origin の許可
+
+Hosting の Origin を完全一致で許可します。API と Hosting の state は直接参照し合いません。
+
+```sh
+hosting_origin="$(terraform -chdir=../hosting output -raw hosting_url)"
+printf '{"allowed_origins":["http://localhost:5173","%s"]}\n' "$hosting_origin" > cors.auto.tfvars.json
+TF_VAR_enable_error_endpoints=true ./scripts/plan.sh
+terraform apply api.tfplan
+```
+
+- `cors.auto.tfvars.json`: この環境だけの設定。Git 管理対象外で、後続の plan でも読み込まれます。
+- Lambda: `CORS_ALLOW_ORIGINS` に JSON 配列として渡し、FastAPI が起動時に読み取り。
+- 形式: スキーム・ホスト・任意のポート。末尾の `/` やパス、wildcard は指定しません。
+- localhost: 開発用に保持。`127.0.0.1:5173` は別 Origin のため許可しません。
+- 初回: Origin 設定を含むバックエンドをビルド・push・適用済みであること。
+- Hosting の URL を変更・削除した場合: このファイルを更新して API の plan・apply を実行。
+- エラー API: この例では検証用に有効化。無効にしたい場合はフラグを省略。
+
+配信先を追加しても、credentials や認証の方式は変更しません。
 
 ### apply と endpoint の取得
 

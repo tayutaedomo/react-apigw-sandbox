@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: '**/hosting.spec.ts',
   fullyParallel: true,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {

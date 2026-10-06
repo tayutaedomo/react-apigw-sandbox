@@ -73,7 +73,8 @@ cp .env.example .env.local
 
 - この値はビルド時にフロントへ取り込まれ、ブラウザーに公開されます。
 - 秘密情報は設定しません。
-- バックエンドの許可 Origin は `http://localhost:5173`。画面を `127.0.0.1` で開くと別 Origin になります。
+- ローカルの既定の許可 Origin は `http://localhost:5173`。画面を `127.0.0.1` で開くと別 Origin になります。
+- Amplify 配信時: [API の許可 Origin](../infra/api/README.md#配信先-origin-の許可)へ配信先を追加。
 - Vite プロキシと credentials は使用しません。
 
 ## チェックとビルド
@@ -96,6 +97,69 @@ npm run build
 - 型検査後、Vite+ でビルドします。
 - 成果物は `dist/` に出力します。
 - ブラウザーテストは [e2e の手順](../e2e/README.md)で実行します。
+
+## Amplify への手動デプロイ
+
+### 準備と公開の流れ
+
+ローカルでビルドした `dist/` を手動で公開します。Terraform にデプロイ処理は含めません。
+
+```mermaid
+flowchart LR
+    T["Terraform<br/>配信先の作成"] --> H[Amplify Hosting]
+    A["API の URL"] --> B["build-hosting.sh<br/>ローカルビルド"]
+    B --> D["dist/"]
+    D --> S["deploy-hosting.mjs<br/>ZIP アップロード・公開"]
+    S --> H
+```
+
+- 前提: [Hosting 作成](../infra/hosting/README.md)と [API の Origin 許可](../infra/api/README.md#配信先-origin-の許可)を完了。
+- 認証: SSO ログイン済み。`AWS_PROFILE` は実行環境で指定。
+- ツール: Node.js・npm、Terraform、AWS CLI v2、`zip`。
+- 手動公開: Git push や Terraform apply では画面を更新しません。
+
+### 配信用ビルド
+
+```sh
+./scripts/build-hosting.sh
+# API URL を明示する場合
+./scripts/build-hosting.sh 'https://example.execute-api.us-east-1.amazonaws.com/sandbox'
+```
+
+- API URL: 省略時は `infra/api` の Terraform output を使用。
+- 出力: `dist/`。ビルド時の接続先が JS に埋め込まれます。
+- API の作成・更新、Hosting への公開: このスクリプトは実行しません。
+- 公開値: フロントの環境変数に秘密情報を入れません。
+- 通常の `npm run build`: 接続先を指定しなければ localhost が既定。AWS 配信用には上記スクリプトを使用。
+
+### 成果物の公開
+
+```sh
+node scripts/deploy-hosting.mjs
+```
+
+- 入力: 作成済みの `dist/`。ビルドを自動実行しません。
+- 配信先: `infra/hosting` の Terraform output から app・branch・region を取得。
+- ZIP: `index.html` と assets をアーカイブ直下へ格納。`dist/` ディレクトリ自体は含めません。
+- 順序: ジョブ作成 → ZIP の PUT → 公開開始 → 完了待機。
+- 失敗: アップロード失敗時は公開を開始せず、配信失敗・待機上限は非0で終了。
+- 待機: 5秒間隔、最大120回。上限超過はジョブ停止ではありません。Amplify で状態を確認。
+- 一時ファイル: ZIP を終了・失敗・中断時に削除。署名付きアップロード URL は表示・保存しません。
+- 更新: API URL または画面を変えたら、再ビルドして手動公開。
+- 配信済み画面の検証: [e2e の Hosting テスト](../e2e/README.md#amplify-配信済み画面のテスト)。
+
+仕様の参照: [Amplify の手動デプロイ](https://docs.aws.amazon.com/amplify/latest/userguide/manual-deploys.html)。
+
+### スクリプトのローカルテスト
+
+```sh
+npm run test:scripts
+```
+
+- `unzip` も使用して、実際の ZIP 直下に `index.html` があることを確認。
+- AWS への接続は置き換え、引数・公開順序・アップロード失敗時の停止・一時ファイル削除を確認。
+
+ビルドと公開は別々に実行し、公開済みの HTTPS 画面は Playwright で確認します。
 
 ## 依存インストールの設定
 

@@ -6,7 +6,7 @@
 
 - [ecr](ecr/README.md): API イメージの保存先を作成。
 - [api](api/README.md): Lambda・API Gateway REST API・実行 role・ログを作成。
-- Amplify: 未追加。API と独立して配信を管理する対象。
+- [hosting](hosting/README.md): Amplify の静的配信先を作成。API・ECR と独立した state。
 - Docker のビルド・push: [backend](../backend/README.md) の独立スクリプトで実行。
 - Amplify への配信: Terraform に含めず、手動デプロイを使用する方針。
 

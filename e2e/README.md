@@ -7,7 +7,7 @@ Playwright の Chromium で、React から実際の FastAPI を呼び出す動�
 - 実 API 疎通: 別 Origin の通信と Hello World の表示。
 - 通信失敗: エラー表示と、接続回復後の再試行。
 - エラー時 CORS: 4xx・5xxの読み取り、Origin拒否、プリフライトと再試行。
-- サーバー起動: Playwright が frontend と backend を自動起動。
+- サーバー起動: ローカルでは Playwright が frontend と backend を自動起動。Hosting モードは配信済み画面を使用。
 
 以下のコマンドは、すべて `e2e/` 内で実行します。
 
@@ -96,6 +96,26 @@ AWS_API_BASE_URL="$(terraform -chdir=../infra/api output -raw api_base_url)" npm
 - ローカルモード: AWS 専用ケースは skip。
 - 実行結果: 通常モードと同じ場所へ保存するため、前回のレポートを上書きします。
 
+### Amplify 配信済み画面のテスト
+
+Vite を起動せず、Amplify に公開したビルドから AWS の API を呼び出します。
+
+```sh
+AWS_API_BASE_URL="$(terraform -chdir=../infra/api output -raw api_base_url)" \
+HOSTING_BASE_URL="$(terraform -chdir=../infra/hosting output -raw hosting_url)" \
+  npm run test:hosting
+```
+
+- 前提: [frontend の手動デプロイ](../frontend/README.md#amplify-への手動デプロイ)と API の Origin 許可を完了。エラー API を有効化。
+- 起動: ローカルの frontend・backend は起動しません。
+- 接続先: ビルドへ埋め込んだ API URL と `AWS_API_BASE_URL` を一致させます。
+- 検証: 正常応答、通信失敗後の再試行、4xx・5xx本文と相関 ID、429の Retry-After、プリフライトの許可・ヘッダー／メソッド拒否。
+- 静的配信: JS の content-type、存在しない JS の404、ページ URL の直接アクセス。
+- 未許可 Origin: `127.0.0.1:5173` を使う2ケースは skip。別 Origin の拒否はローカル・`test:aws` で確認。
+- 画面記録: 操作の節目とテスト終了時に PNG を保存。
+
+配信済みの成果物を検証するため、ローカルのソース変更は再ビルド・再公開後に反映されます。
+
 ### エラー時 CORS のケース
 
 実レスポンスを使い、HTTP エラーとブラウザーの読み取り拒否を区別します。
@@ -124,9 +144,11 @@ npm test -- tests/hello.spec.ts
 - `playwright.config.ts`: Chromium、サーバーの起動方法、接続先を定義。
 - `playwright.container.config.ts`: API の起動を Docker に切り替え。
 - `playwright.aws.config.ts`: API を AWS endpoint に切り替え、frontend のみ起動。
+- `playwright.hosting.config.ts`: Amplify 配信済みの画面を検証。ローカルサーバーは起動しない。
 - `scripts/run-api-container.sh`: コンテナを起動し、終了・中断時に削除。
 - `tests/hello.spec.ts`: 疎通と通信失敗・再試行のテスト。
 - `tests/error-cors.spec.ts`: エラー本文・相関 ID、Origin・プリフライトと再試行のテスト。
+- `tests/hosting.spec.ts`: Hosting 専用の静的配信・直接アクセスのテスト。
 - `test-results/`: テストの出力。Git 管理の対象外。
 
 ### 画面キャプチャと HTML レポート

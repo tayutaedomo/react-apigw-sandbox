@@ -6,6 +6,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 const apiBaseUrl = (process.env.AWS_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+const frontendOrigin = process.env.HOSTING_BASE_URL || 'http://localhost:5173';
 const helloUrl = `${apiBaseUrl}/hello`;
 
 async function capture(page: Page, testInfo: TestInfo, name: string) {
@@ -24,7 +25,7 @@ test('React から別 Origin の実 API を呼び出して結果を表示する'
   const response = await responsePromise;
 
   expect(response.status()).toBe(200);
-  expect(response.headers()['access-control-allow-origin']).toBe('http://localhost:5173');
+  expect(response.headers()['access-control-allow-origin']).toBe(frontendOrigin);
   await expect(page.getByText('API: Hello World', { exact: true })).toBeVisible();
   await capture(page, testInfo, 'success');
 });
@@ -47,9 +48,9 @@ test('React で通信失敗を表示し、回復後に再試行できる', async
 
 test('AWS の Lambda 呼び出し ID をレスポンスから取得できる', async ({ request }) => {
   test.skip(!process.env.AWS_API_BASE_URL, 'AWS モードでのみ検証する');
-  const response = await request.get(helloUrl, { headers: { Origin: 'http://localhost:5173' } });
+  const response = await request.get(helloUrl, { headers: { Origin: frontendOrigin } });
   expect(response.status()).toBe(200);
   expect(await response.json()).toEqual({ message: 'Hello World' });
   expect(response.headers()['x-request-id']).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
-  expect(response.headers()['access-control-allow-origin']).toBe('http://localhost:5173');
+  expect(response.headers()['access-control-allow-origin']).toBe(frontendOrigin);
 });

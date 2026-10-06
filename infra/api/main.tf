@@ -92,6 +92,8 @@ resource "aws_lambda_function" "api" {
     variables = {
       # Uvicorn と HTTP ログの出力レベルをアプリ側でも INFO に揃える。
       POWERTOOLS_LOG_LEVEL = "INFO"
+      # 配信先は実行時の変数で渡す。Hosting の state と API の state を結合しない。
+      CORS_ALLOW_ORIGINS = jsonencode(var.allowed_origins)
       # 検証時だけ意図的なエラー API を公開し、通常は登録しない。
       ENABLE_ERROR_ENDPOINTS = tostring(var.enable_error_endpoints)
       # Web Adapter の readiness 待機を初期化フェーズ内で行う。

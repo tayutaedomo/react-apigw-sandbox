@@ -73,6 +73,7 @@ for (const probe of cases) {
 }
 
 test('未許可 Origin ではサーバーが400を返しても本文を読み取れない', async ({ page }, testInfo) => {
+  test.skip(!!process.env.HOSTING_BASE_URL, '別ホスト名のローカル Vite を使うケース');
   // 同じ Vite を別ホスト名で開き、ページの Origin を変える。レスポンスは加工しない。
   await page.goto('http://127.0.0.1:5173');
   await page.getByLabel('検証ケース').selectOption('http-400');
@@ -94,6 +95,7 @@ for (const probe of [
   { id: 'preflight-method', label: '未許可メソッドの拒否', allowed: false, deniedOrigin: false },
 ]) {
   test(`プリフライト：${probe.label}と実リクエストの送信有無`, async ({ page, context }, testInfo) => {
+    test.skip(!!process.env.HOSTING_BASE_URL && probe.deniedOrigin, '別ホスト名のローカル Vite を使うケース');
     // CDP は Chromium が実際に送信した OPTIONS と本リクエストを観測するために使う。
     const session = await context.newCDPSession(page);
     await session.send('Network.enable');
