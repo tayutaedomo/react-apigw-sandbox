@@ -12,6 +12,17 @@ FastAPI で Hello World と、設定で有効化するエラー検証 API を提
 
 以下のコマンドは、すべて `backend/` 内で実行します。
 
+## 目次
+
+- [開発環境](#開発環境)
+- [起動と API の確認](#起動と-api-の確認)
+- [エラーレスポンスの CORS 検証](#エラーレスポンスの-cors-検証)
+- [コンテナのビルドと起動](#コンテナのビルドと起動)
+- [ECR への push](#ecr-への-push)
+- [構造化ログ](#構造化ログ)
+- [テスト](#テスト)
+- [操作のまとめ](#操作のまとめ)
+
 ## 開発環境
 
 ### 必要なツール
@@ -83,7 +94,7 @@ ENABLE_ERROR_ENDPOINTS=true uv run --locked uvicorn app.main:app --reload --host
 ENABLE_ERROR_ENDPOINTS=true docker compose up --no-build
 ```
 
-- `GET /errors/http/{status}`: 400・409・418・429・500・502・503・504。429には `Retry-After: 1` を付与。
+- `GET /errors/http/{status}`: 400・409・418・429・500・502・503・504。429には再試行まで1秒待つ指示の `Retry-After: 1` を付与。
 - `GET /errors/validation`: 必須の `value`（1以上の整数）。欠落・型不正・範囲外は422。
 - `GET /errors/unhandled`: 意図的な未処理例外による500。
 - `GET /errors/response-validation`: 戻り値の検証エラーによる500。
@@ -108,7 +119,7 @@ ENABLE_ERROR_ENDPOINTS=true docker compose up --no-build
 - credentials・認証: この検証では追加しない。
 
 API テストでヘッダーとログを、Playwright でブラウザーの読み取りと送信有無を確認します。
-配置の根拠は [Starlette の CORS 全体適用](https://www.starlette.dev/middleware/#corsmiddleware-global-enforcement)を参照してください。
+配置の理由と応答経路は [CORS 全体適用の図解](../docs/cors.md)を参照してください。`add_middleware` との違い、公開ヘッダー、`Retry-After` も説明しています。
 
 ## コンテナのビルドと起動
 
@@ -143,6 +154,8 @@ docker compose up --no-build
 - ファイルシステム: 読み取り専用。書き込み用に `/tmp` を用意。
 - 終了: `Ctrl+C` の後に `docker compose down` でコンテナとネットワークを削除。
 - ブラウザー検証: [e2e のコンテナテスト](../e2e/README.md#コンテナを使ったテスト)を使用。
+
+Adapter と Uvicorn の通信と、接続再利用を無効化した理由は [接続再利用の図解](../docs/connection-reuse.md)を参照してください。
 
 ローカルでは Uvicorn に直接アクセスします。Lambda Web Adapter のイベント変換・拡張機能起動は、[AWS API の検証](../infra/api/README.md#疎通とログ)で確認します。
 

@@ -10,7 +10,8 @@ API Gateway REST API から、コンテナ方式の Lambda 上の FastAPI を呼
 - イメージ: タグではなく digest URI を指定。
 - Lambda: `x86_64`、512 MB、タイムアウト15秒。
 - Web Adapter: 接続再利用を無効化。未処理500で閉じられた接続の再利用による、次の呼び出しの502を避ける。
-- トレードオフ: 毎回ローカル TCP 接続を作成。性能への影響は未測定。設定根拠は [Adapter v1.1.0 の環境変数](https://github.com/aws/aws-lambda-web-adapter/blob/v1.1.0/README.md#configurations)を参照。
+- トレードオフ: 毎回ローカル TCP 接続を作成。性能への影響は未測定。本番採用は別途判断。
+- 通信経路と判断理由: [Web Adapter と Uvicorn の接続再利用](../../docs/connection-reuse.md)に図解。Lambda 実行環境の再利用は無効化しない。
 - 統合: Lambda proxy。ルートと配下のパスを FastAPI へ渡す。
 - API: Regional、ステージ名 `sandbox`。
 - ログ: CloudWatch に7日保持。アプリ・Uvicorn・Lambda のプラットフォームログを JSON で記録。

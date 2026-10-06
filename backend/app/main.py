@@ -26,11 +26,14 @@ def create_app(*, enable_error_endpoints: bool = False) -> CORSMiddleware:
     if enable_error_endpoints:
         api.include_router(errors_router)
 
-    # add_middleware では FastAPI の ServerErrorMiddleware がさらに外側に置かれる。
-    # その500も観測するため、ログを FastAPI の外側、CORS をさらに外側に配置する。
-    # CORS のプリフライトはアプリへ届かないため、HTTP ログの対象外になる。
-    return CORSMiddleware(
-        RequestLoggingMiddleware(api),
+    # FastAPI 内部の ServerErrorMiddleware が生成する500も観測するため、
+    # add_middleware ではなく FastAPI 全体を包む。詳細: docs/cors.md。
+    logged_app = RequestLoggingMiddleware(api)
+
+    # 最も外側で、正常応答と500の両方へ CORS ヘッダーを付ける。
+    # プリフライトはここで直接応答し、logged_app と api には届かない。
+    cors_app = CORSMiddleware(
+        logged_app,
         allow_origins=["http://localhost:5173"],
         allow_credentials=False,
         allow_methods=["GET"],
@@ -38,6 +41,7 @@ def create_app(*, enable_error_endpoints: bool = False) -> CORSMiddleware:
         # ブラウザーから相関 ID と429の再試行情報を読めるようにする。
         expose_headers=["X-Request-Id", "Retry-After"],
     )
+    return cors_app
 
 
 app = create_app(enable_error_endpoints=os.environ.get("ENABLE_ERROR_ENDPOINTS") == "true")
