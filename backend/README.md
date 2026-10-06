@@ -119,7 +119,7 @@ ENABLE_ERROR_ENDPOINTS=true docker compose up --no-build
 - credentials・認証: この検証では追加しない。
 
 API テストでヘッダーとログを、Playwright でブラウザーの読み取りと送信有無を確認します。
-配置の理由と応答経路は [CORS 全体適用の図解](../docs/cors.md)を参照してください。`add_middleware` との違い、公開ヘッダー、`Retry-After` も説明しています。
+配置の理由と応答経路は [CORS 全体適用の図解](../docs/cors.md)を参照してください。`add_middleware` との違い、`exception_handler` の再送出と限界、公開ヘッダー、`Retry-After` も説明しています。
 
 ## コンテナのビルドと起動
 
