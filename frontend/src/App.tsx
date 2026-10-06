@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ErrorProbe } from './ErrorProbe';
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 
@@ -39,6 +40,7 @@ export function App() {
         {message && <p>API: {message}</p>}
       </div>
       {error && <p role="alert">API 呼び出しに失敗しました: {error}</p>}
+      <ErrorProbe apiBaseUrl={apiBaseUrl} />
     </main>
   );
 }

@@ -92,8 +92,14 @@ resource "aws_lambda_function" "api" {
     variables = {
       # Uvicorn と HTTP ログの出力レベルをアプリ側でも INFO に揃える。
       POWERTOOLS_LOG_LEVEL = "INFO"
+      # 検証時だけ意図的なエラー API を公開し、通常は登録しない。
+      ENABLE_ERROR_ENDPOINTS = tostring(var.enable_error_endpoints)
       # Web Adapter の readiness 待機を初期化フェーズ内で行う。
       AWS_LWA_ASYNC_INIT = "false"
+      # 未処理例外の再送出で Uvicorn は接続を閉じる。閉じた接続を次の呼び出しで
+      # 再利用すると502を観測したため、この PoC では Adapter の接続再利用を無効化。
+      # 毎回ループバック TCP 接続を作るコストより、エラー応答の安定した検証を優先する。
+      AWS_LWA_POOL_IDLE_TIMEOUT_SECONDS = "0"
     }
   }
 

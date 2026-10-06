@@ -13,3 +13,9 @@ variable "repository_name" {
   type        = string
   default     = "react-apigw-sandbox-api"
 }
+
+variable "enable_error_endpoints" {
+  description = "FastAPI の意図的なエラー検証 API を有効にする"
+  type        = bool
+  default     = false
+}

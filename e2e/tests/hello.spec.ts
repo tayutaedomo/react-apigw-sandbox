@@ -20,7 +20,7 @@ test('React から別 Origin の実 API を呼び出して結果を表示する'
   await expect(page.getByRole('heading', { name: 'Hello World' })).toBeVisible();
 
   const responsePromise = page.waitForResponse(helloUrl);
-  await page.getByRole('button', { name: 'API を呼び出す' }).click();
+  await page.getByRole('button', { name: 'API を呼び出す', exact: true }).click();
   const response = await responsePromise;
 
   expect(response.status()).toBe(200);
@@ -33,13 +33,13 @@ test('React で通信失敗を表示し、回復後に再試行できる', async
   await page.route(helloUrl, route => route.abort('connectionfailed'));
   await page.goto('/');
   await capture(page, testInfo, '01-initial');
-  await page.getByRole('button', { name: 'API を呼び出す' }).click();
+  await page.getByRole('button', { name: 'API を呼び出す', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('API 呼び出しに失敗しました');
-  await expect(page.getByRole('button', { name: 'API を呼び出す' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'API を呼び出す', exact: true })).toBeEnabled();
   await capture(page, testInfo, '02-connection-failed');
 
   await page.unroute(helloUrl);
-  await page.getByRole('button', { name: 'API を呼び出す' }).click();
+  await page.getByRole('button', { name: 'API を呼び出す', exact: true }).click();
   await expect(page.getByText('API: Hello World', { exact: true })).toBeVisible();
   await capture(page, testInfo, 'success');
   await expect(page.getByRole('alert')).toHaveCount(0);

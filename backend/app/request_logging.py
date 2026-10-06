@@ -52,12 +52,13 @@ class RequestLoggingMiddleware:
 
         started = perf_counter()
         correlation_id, id_source = request_id(scope)
-        # レスポンス開始前の例外は、外側のエラーハンドラーが 500 に変換する。
+        # レスポンス開始前の例外でも未設定の値にしない。通常は実際の500を取得する。
         status_code = 500
+        completed_duration_ms: float | None = None
 
         async def send_with_request_id(message: Message) -> None:
             """レスポンス開始時にステータスを取得し、追跡 ID を付与する。"""
-            nonlocal status_code
+            nonlocal status_code, completed_duration_ms
             if message["type"] == "http.response.start":
                 status_code = message["status"]
                 message = {
@@ -67,6 +68,10 @@ class RequestLoggingMiddleware:
                         (b"x-request-id", correlation_id.encode("ascii")),
                     ],
                 }
+            elif message["type"] == "http.response.body" and not message.get("more_body", False):
+                # Adapter が本文を受け取ると Lambda が停止する場合がある。ログ出力が
+                # 後続の呼び出しへ遅れても、停止中の時間を処理時間へ含めない。
+                completed_duration_ms = round((perf_counter() - started) * 1000, 3)
             await send(message)
 
         def fields() -> dict:
@@ -75,7 +80,8 @@ class RequestLoggingMiddleware:
                 "method": scope["method"],
                 "path": scope["path"],
                 "status_code": status_code,
-                "duration_ms": round((perf_counter() - started) * 1000, 3),
+                "duration_ms": completed_duration_ms if completed_duration_ms is not None
+                else round((perf_counter() - started) * 1000, 3),
                 "correlation_id": correlation_id,
                 "request_id_source": id_source,
                 "lambda_request_id": correlation_id if id_source == "lambda" else None,
@@ -85,7 +91,7 @@ class RequestLoggingMiddleware:
             await self.app(scope, receive, send_with_request_id)
         except Exception:
             logger.exception("HTTP request failed", extra=fields())
-            # エラー処理は FastAPI に任せ、例外を成功レスポンスへ変換しない。
+            # FastAPI は500送信後も例外を再送出する。ERROR に記録して再送出を維持する。
             raise
         else:
             # extra はログ1件に限定され、並行処理間で Logger の状態を共有しない。

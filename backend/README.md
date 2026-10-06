@@ -2,7 +2,7 @@
 
 ## 概要
 
-FastAPI で Hello World API を提供します。
+FastAPI で Hello World と、設定で有効化するエラー検証 API を提供します。
 
 - FastAPI: API と OpenAPI ドキュメント。
 - Uvicorn: ローカルの HTTP サーバー。
@@ -11,6 +11,17 @@ FastAPI で Hello World API を提供します。
 - pytest / httpx2: API テスト。
 
 以下のコマンドは、すべて `backend/` 内で実行します。
+
+## 目次
+
+- [開発環境](#開発環境)
+- [起動と API の確認](#起動と-api-の確認)
+- [エラーレスポンスの CORS 検証](#エラーレスポンスの-cors-検証)
+- [コンテナのビルドと起動](#コンテナのビルドと起動)
+- [ECR への push](#ecr-への-push)
+- [構造化ログ](#構造化ログ)
+- [テスト](#テスト)
+- [操作のまとめ](#操作のまとめ)
 
 ## 開発環境
 
@@ -71,6 +82,45 @@ curl http://localhost:8000/hello
 
 CORS はブラウザーがレスポンスを読み取れるかの制御です。`curl` の疎通だけではブラウザーの動作は確認できないため、[e2e テスト](../e2e/README.md)も使用します。
 
+## エラーレスポンスの CORS 検証
+
+### 有効化と操作
+
+意図的なエラー API は既定では無効です。検証時にだけ有効化して起動します。
+
+```sh
+ENABLE_ERROR_ENDPOINTS=true uv run --locked uvicorn app.main:app --reload --host localhost --port 8000
+# コンテナを使う場合
+ENABLE_ERROR_ENDPOINTS=true docker compose up --no-build
+```
+
+- `GET /errors/http/{status}`: 400・409・418・429・500・502・503・504。429には再試行まで1秒待つ指示の `Retry-After: 1` を付与。
+- `GET /errors/validation`: 必須の `value`（1以上の整数）。欠落・型不正・範囲外は422。
+- `GET /errors/unhandled`: 意図的な未処理例外による500。
+- `GET /errors/response-validation`: 戻り値の検証エラーによる500。
+- 標準エラー: 存在しないパスは404、`POST /hello` は405。
+- 無効時: `/errors/` のルートを登録しないため404。
+- ブラウザー操作: [frontend の検証画面](../frontend/README.md#エラーレスポンスの検証)。
+
+### CORS とログの方針
+
+未処理例外の500にも CORS と相関 ID を付けるため、FastAPI 全体をミドルウェアで包みます。
+
+- 配置順: CORS → リクエストログ → FastAPI（標準の500生成処理を含む）。
+- 許可 Origin: ステータスと本文、`X-Request-Id`・`Retry-After` をブラウザーで読み取り可能。
+- 未許可 Origin: サーバーは応答するが、ブラウザーは本文を読み取れない。
+- プリフライト: GETを許可。未許可 Origin・メソッド・ヘッダーは400で拒否。
+- `allow_methods`: ブラウザーのプリフライト制御。サーバーの認証・アクセス制限ではない。
+- 未処理例外: 本文は `Internal Server Error`。詳細とスタックトレースは ERROR ログへ記録。
+- 明示的な HTTP エラー: 処理済みレスポンスとして INFO ログにステータスを記録。
+- プリフライト: 外側の CORS が直接応答するため、リクエストログと相関 ID の対象外。
+- 処理時間: 最終本文を送る直前に確定し、送信後の Lambda の停止時間を含めない。
+- ログ出力時期: AWS では500応答後の ERROR ログが、後続呼び出しで出力されるケースを観測。詳細は [PoC の記録](../docs/poc.md#aws-で観測したログ出力の遅延)を参照。
+- credentials・認証: この検証では追加しない。
+
+API テストでヘッダーとログを、Playwright でブラウザーの読み取りと送信有無を確認します。
+配置の理由と応答経路は [CORS 全体適用の図解](../docs/cors.md)を参照してください。`add_middleware` との違い、`exception_handler` の再送出と限界、公開ヘッダー、`Retry-After` も説明しています。
+
 ## コンテナのビルドと起動
 
 ### イメージのビルド
@@ -104,6 +154,8 @@ docker compose up --no-build
 - ファイルシステム: 読み取り専用。書き込み用に `/tmp` を用意。
 - 終了: `Ctrl+C` の後に `docker compose down` でコンテナとネットワークを削除。
 - ブラウザー検証: [e2e のコンテナテスト](../e2e/README.md#コンテナを使ったテスト)を使用。
+
+Adapter と Uvicorn の通信と、接続再利用を無効化した理由は [接続再利用の図解](../docs/connection-reuse.md)を参照してください。
 
 ローカルでは Uvicorn に直接アクセスします。Lambda Web Adapter のイベント変換・拡張機能起動は、[AWS API の検証](../infra/api/README.md#疎通とログ)で確認します。
 
@@ -163,7 +215,7 @@ Powertools の Logger で、リクエスト完了・例外を JSON として標�
 - `X-Request-Id`: レスポンス開始を取得できる場合、同じ ID を付与。
 - Lambda の ID: Web Adapter が渡す `x-amzn-lambda-context` の `request_id` を取得。
 - readiness probe・コンテキスト欠落や不正: UUID を生成し、出所を `generated` として記録。
-- 未処理例外の 500: 外側の FastAPI がレスポンスを生成するため、ID ヘッダーは付与されません。ログで追跡します。
+- 未処理例外の 500: FastAPI 全体をログで包むため、本文に加えて ID ヘッダーも返します。
 - 例外: ERROR レベルで例外名とスタックトレースを記録し、例外を再送出。
 
 リクエスト本文・クエリ文字列・認証ヘッダーは記録しません。メタデータはログごとに渡し、同時リクエスト間で共有しません。
@@ -221,7 +273,7 @@ uv run --locked pytest
 ### 確認する内容
 
 - `/hello` のステータスと JSON 本文。
-- 許可 Origin に対する CORS ヘッダー。
+- 正常・エラー応答に対する CORS ヘッダー、プリフライトの許可・拒否。
 - 未許可 Origin に許可ヘッダーを付けないこと。
 - ステータス・処理時間・相関 ID を JSON に記録すること。
 - 例外を記録し、500 レスポンスを維持すること。

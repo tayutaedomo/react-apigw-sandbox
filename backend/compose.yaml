@@ -17,3 +17,4 @@ services:
       - "127.0.0.1:8000:8080"
     environment:
       POWERTOOLS_LOG_LEVEL: ${POWERTOOLS_LOG_LEVEL:-INFO}
+      ENABLE_ERROR_ENDPOINTS: ${ENABLE_ERROR_ENDPOINTS:-false}

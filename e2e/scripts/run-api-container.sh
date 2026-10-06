@@ -14,5 +14,5 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # 起動設定は Compose に委譲し、このスクリプトはテスト固有の終了処理を担う。
-"${compose[@]}" up --no-build --abort-on-container-exit --exit-code-from api &
+ENABLE_ERROR_ENDPOINTS=true "${compose[@]}" up --no-build --abort-on-container-exit --exit-code-from api &
 wait "$!"

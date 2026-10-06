@@ -9,6 +9,9 @@ API Gateway REST API から、コンテナ方式の Lambda 上の FastAPI を呼
 - リソース定義: [main.tf](main.tf)に実行環境・権限・Lambda・Gateway・公開ステージをセクション別に配置。
 - イメージ: タグではなく digest URI を指定。
 - Lambda: `x86_64`、512 MB、タイムアウト15秒。
+- Web Adapter: 接続再利用を無効化。未処理500で閉じられた接続の再利用による、次の呼び出しの502を避ける。
+- トレードオフ: 毎回ローカル TCP 接続を作成。性能への影響は未測定。本番採用は別途判断。
+- 通信経路と判断理由: [Web Adapter と Uvicorn の接続再利用](../../docs/connection-reuse.md)に図解。Lambda 実行環境の再利用は無効化しない。
 - 統合: Lambda proxy。ルートと配下のパスを FastAPI へ渡す。
 - API: Regional、ステージ名 `sandbox`。
 - ログ: CloudWatch に7日保持。アプリ・Uvicorn・Lambda のプラットフォームログを JSON で記録。
@@ -74,6 +77,23 @@ terraform validate
 - 検証: タグ指定と、参照 repository の URL に一致しない URI を拒否。
 - ECR: data source で照会し、この state から作成・削除しない。
 
+### エラー検証 API の有効化
+
+検証時だけ `enable_error_endpoints` を有効にして plan を作成します。
+
+```sh
+TF_VAR_enable_error_endpoints=true ./scripts/plan.sh
+terraform apply api.tfplan
+```
+
+- 既定: `false`。Lambda の `ENABLE_ERROR_ENDPOINTS` に反映。
+- 必要なイメージ: エラー検証 API を含むイメージをビルド・push済み。
+- 更新を継続する場合: 有効状態を維持する plan では同じ変数を渡す。
+- 無効へ戻す場合: 変数を省略して plan・apply。意図的なエラー API は404になる。
+- Gateway deployment: Lambda 環境変数とイメージだけの更新では作り直さない。
+
+有効化は Lambda の設定として管理し、Docker イメージの再ビルドなしで切り替えられます。
+
 ### apply と endpoint の取得
 
 保存された plan を確認してから apply します。
@@ -100,7 +120,8 @@ AWS_API_BASE_URL="$(terraform -chdir=../infra/api output -raw api_base_url)" npm
 
 - API: AWS 上の REST API を使用。ローカル backend は起動しない。
 - frontend: Playwright がローカル Vite サーバーを起動し、API URL を渡す。
-- 検証: Hello World、CORS、通信失敗・再試行、レスポンスの追跡 ID。
+- 検証: Hello World、CORS、通信失敗・再試行、レスポンスの追跡 ID、エラー応答とプリフライト。
+- 全テストの前提: 上記のエラー検証 API を有効化。無効のまま疎通だけを確認する場合は `npm run test:aws -- tests/hello.spec.ts`。
 - 画面キャプチャ: [e2e の README](../../e2e/README.md#画面キャプチャと-html-レポート)を参照。
 
 ### CloudWatch の確認
