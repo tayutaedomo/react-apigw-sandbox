@@ -65,11 +65,7 @@ flowchart LR
 
 ## 今後の検証対象
 
-以下は、まだ検証していない構成と動作です。
-
-- イメージ: スキャンで検出した脆弱性への対応と再スキャン。
-- エラー時 CORS: Gateway 自身が返すエラーと Lambda 統合の障害。
-- 追加検討: 認証方式と credentials を含む CORS。
+残タスクは [PoC の TODO](docs/poc.md#残タスク-todo)で管理しています。次の対象は Gateway 自身のエラーと Lambda 統合障害の CORS です。
 
 ## 開発・実行手順への案内
 
