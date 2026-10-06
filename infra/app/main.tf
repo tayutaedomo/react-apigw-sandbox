@@ -177,6 +177,93 @@ resource "aws_api_gateway_integration" "lambda" {
   timeout_milliseconds = 29000
 }
 
+# greedy proxy では存在しないパスも FastAPI へ届くため、明示的な検証パスを予約する。
+# GET を MOCK 統合にし、必須クエリ value の欠落を Gateway 自身の400として再現する。
+# Lambda を呼び出さず、既存の ANY / proxy の設定や呼び出し権限を変更しない。
+resource "aws_api_gateway_resource" "probe" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_rest_api.api.root_resource_id
+  path_part   = "gateway-probe"
+}
+
+# パラメーター検証は統合より前に Gateway が実行する。本文の検証は今回の対象外。
+resource "aws_api_gateway_request_validator" "probe" {
+  rest_api_id                 = aws_api_gateway_rest_api.api.id
+  name                        = "gateway-probe-query"
+  validate_request_parameters = true
+  validate_request_body       = false
+}
+
+resource "aws_api_gateway_method" "probe" {
+  rest_api_id          = aws_api_gateway_rest_api.api.id
+  resource_id          = aws_api_gateway_resource.probe.id
+  http_method          = "GET"
+  authorization        = "NONE"
+  request_validator_id = aws_api_gateway_request_validator.probe.id
+  request_parameters = {
+    "method.request.querystring.value" = true
+  }
+}
+
+# MOCK は Gateway 内で応答を作る。固定の正常応答を400後の回復確認にも使う。
+resource "aws_api_gateway_integration" "probe" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.probe.id
+  http_method = aws_api_gateway_method.probe.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+# MOCK の応答ヘッダーは method response で宣言してから integration response で設定する。
+resource "aws_api_gateway_method_response" "probe" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.probe.id
+  http_method = aws_api_gateway_method.probe.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "probe" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.probe.id
+  http_method = aws_api_gateway_method.probe.http_method
+  status_code = aws_api_gateway_method_response.probe.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = "'${local.hosting_origin}'"
+  }
+  response_templates = {
+    "application/json" = jsonencode({ message = "Gateway probe" })
+  }
+  # method の参照だけでは統合の作成完了を待たないため、依存を明示する。
+  depends_on = [aws_api_gateway_integration.probe]
+}
+
+# 必須クエリの欠落は BAD_REQUEST_PARAMETERS。統合を呼び出さず Gateway が拒否する。
+# FastAPI を通らないエラーには Gateway Response で CORS を付ける。
+# 今回は Hosting の1 Origin を固定で許可する。Origin の無条件反射や複数値は使わない。
+# DEFAULT_4XX / DEFAULT_5XX は追加せず、未検証の障害へ設定を広げない。
+resource "aws_api_gateway_gateway_response" "missing_parameter" {
+  count         = var.enable_gateway_error_cors ? 1 : 0
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  response_type = "BAD_REQUEST_PARAMETERS"
+  status_code   = "400"
+  response_parameters = {
+    "gatewayresponse.header.Access-Control-Allow-Origin"   = "'${local.hosting_origin}'"
+    "gatewayresponse.header.Access-Control-Expose-Headers" = "'x-amzn-RequestId'"
+  }
+  # Lambda の ID とは別の Gateway request ID。本文にも含め、ブラウザーで照合できる。
+  # Gateway Response は VTL ではなく単純な置換なので、固定文言と context だけを使う。
+  response_templates = {
+    "application/json" = <<-JSON
+      {"message":"Missing required query parameter: value","type":"$context.error.responseType","request_id":"$context.requestId"}
+    JSON
+  }
+}
+
 # 実行 role は Lambda 内で使う権限。この permission は外部からの呼び出し許可。
 # 呼び出し元をこの REST API の sandbox ステージに限定し、ほかの API へ開放しない。
 resource "aws_lambda_permission" "gateway" {
@@ -199,6 +286,28 @@ resource "aws_api_gateway_deployment" "api" {
   triggers = {
     redeployment = sha1(jsonencode({
       proxy_path = aws_api_gateway_resource.proxy.path_part
+      # 検証パス・MOCK 応答・Gateway Response の変更も公開 snapshot に反映する。
+      probe = {
+        path                = aws_api_gateway_resource.probe.path_part
+        method              = aws_api_gateway_method.probe.http_method
+        authorization       = aws_api_gateway_method.probe.authorization
+        request_parameters  = aws_api_gateway_method.probe.request_parameters
+        validator_id        = aws_api_gateway_request_validator.probe.id
+        validate_parameters = aws_api_gateway_request_validator.probe.validate_request_parameters
+        validate_body       = aws_api_gateway_request_validator.probe.validate_request_body
+        integration_type    = aws_api_gateway_integration.probe.type
+        request_templates   = aws_api_gateway_integration.probe.request_templates
+        status_code         = aws_api_gateway_method_response.probe.status_code
+        method_parameters   = aws_api_gateway_method_response.probe.response_parameters
+        response_parameters = aws_api_gateway_integration_response.probe.response_parameters
+        response_templates  = aws_api_gateway_integration_response.probe.response_templates
+      }
+      gateway_responses = [for response in aws_api_gateway_gateway_response.missing_parameter : {
+        response_type       = response.response_type
+        status_code         = response.status_code
+        response_parameters = response.response_parameters
+        response_templates  = response.response_templates
+      }]
       methods = { for key, method in aws_api_gateway_method.api : key => {
         resource_id   = method.resource_id
         http_method   = method.http_method

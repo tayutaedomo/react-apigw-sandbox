@@ -153,6 +153,23 @@ HOSTING_BASE_URL="$(terraform -chdir=../infra/app output -raw hosting_url)" \
 
 プリフライトが拒否された場合、API の400本文を画面で読めるわけではありません。ブラウザーは本リクエストを送らず、fetch を失敗させます。
 
+### Gateway のエラー時 CORS
+
+Hosting モードで、Gateway が生成する400とブラウザーの読み取りを確認します。
+
+```sh
+AWS_API_BASE_URL="$(terraform -chdir=../infra/app output -raw api_base_url)" \
+HOSTING_BASE_URL="$(terraform -chdir=../infra/app output -raw hosting_url)" \
+  npm run test:hosting -- gateway.spec.ts
+```
+
+- 前提: app の検証パス `/gateway-probe` と Gateway Response を適用済み。FastAPI のエラー API の有効化は不要。
+- 比較: CORS 設定なしの構成では `EXPECT_GATEWAY_CORS=false` を追加。構成変更は [比較手順](../docs/gateway-cors.md#設定前後を比較する手順)を参照。
+- HTTP 結合: GET の400、固定 Origin、エラー種別、Gateway request ID、GET の正常応答。
+- ブラウザー結合: 配信済みページで実 API に fetch し、テスト専用パネルに表示した結果を撮影。React の表示機能の E2E ではありません。
+- 未許可 Origin: テスト用ページだけを用意し、実 AWS 応答の読み取り拒否を確認。
+- ローカル・AWS 単体モード: Gateway の許可 Origin が Hosting のため、このケースは skip。
+
 ### 種類・ケースを指定して実行
 
 ```sh
@@ -176,6 +193,8 @@ npm test -- tests/browser/hello.spec.ts
 - `tests/browser/hello.spec.ts`: 画面の疎通と通信失敗・再試行。
 - `tests/browser/error-cors.spec.ts`: ブラウザーのエラー本文・相関 ID、Origin・プリフライトと再試行。
 - `tests/browser/hosting.spec.ts`: 配信済み SPA の直接アクセスと API 呼び出し。
+- `tests/browser/gateway.spec.ts`: Gateway の400の読み取り・未許可 Origin・正常 GET への切り替え。
+- `tests/http/gateway.spec.ts`: Gateway の400本文・CORS と MOCK の正常応答。
 - `tests/http/api.spec.ts`: AWS API の本文・CORS ヘッダー・Lambda Request ID。
 - `tests/http/hosting.spec.ts`: 配信ファイルの content-type・本文と未存在 JS の404。
 - `helpers/capture.ts`: ブラウザーの操作前後の PNG 保存と添付を共通化。

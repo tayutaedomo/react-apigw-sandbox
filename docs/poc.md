@@ -9,6 +9,7 @@
 - [Lambda と REST API](#lambda-と-rest-api)
 - [アプリのエラー時 CORS](#アプリのエラー時-cors)
 - [Amplify Hosting と手動デプロイ](#amplify-hosting-と手動デプロイ)
+- [Gateway のパラメーター検証エラーと CORS](#gateway-のパラメーター検証エラーと-cors)
 - [残タスク TODO](#残タスク-todo)
 
 ローカルと Amplify Hosting から AWS 上の API まで、確認済みの挙動と検証方法を記録しています。
@@ -133,7 +134,7 @@ FastAPI 全体を CORS とリクエストログで包み、未処理例外を含
 - 限界: 応答直後のログ出力は保証しない。後続実行がない場合の出力保証は未検証。
 - 仕様の参照: [Lambda の実行環境と未完了処理の再開](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html)。
 
-エラー本文の読み取りと CORS による拒否は確認済みです。Gateway 自身が生成するエラーは下記の未検証範囲です。
+エラー本文の読み取りと CORS による拒否は確認済みです。Gateway のパラメーター検証エラーは下記で確認し、スロットリング・Lambda 統合障害は未検証です。
 
 ## Amplify Hosting と手動デプロイ
 
@@ -157,18 +158,43 @@ FastAPI 全体を CORS とリクエストログで包み、未処理例外を含
 
 成果物の公開と AWS リソースの作成を分離し、実際に配信された React からの CORS を検証しています。
 
+## Gateway のパラメーター検証エラーと CORS
+
+Lambda を呼び出さずに Gateway の400を再現し、Gateway Response の CORS 設定前後でブラウザーの読み取りを確認しています。[構成と比較手順の図解](gateway-cors.md)を参照してください。
+
+| 検証内容 | 確認できたこと | 検証方法 |
+| --- | --- | --- |
+| Gateway の検証エラー | `/gateway-probe` の必須クエリ `value` がないと400を生成する | HTTP 結合テスト |
+| CORS なし | 400本文は存在するが、Hosting の JavaScript から読めない | HTTP / ブラウザー結合テスト |
+| CORS あり | Hosting から400・本文・Gateway の request ID を読める | HTTP / ブラウザー結合テスト |
+| 未許可 Origin | 固定の許可 Origin と一致せず、ブラウザーが本文の読み取りを拒否する | ブラウザー結合テスト |
+| 正常への切り替え | 必須クエリ付き GET は Gateway の MOCK 統合から200を返し、本文を読める | HTTP / ブラウザー結合テスト |
+| 既存 API | Hello World の表示・再試行と Lambda の ID の取得を維持する | Playwright |
+
+- 対象: `BAD_REQUEST_PARAMETERS`。FastAPI の422とは別の検証エラー。
+- 許可: Gateway のエラーと MOCK 応答は Hosting の一つの Origin に固定。FastAPI の追加許可一覧とは独立。
+- 記録: ブラウザー結合テストの結果をテスト専用パネルに表示し、400/CORS拒否・正常 GET の PNG を添付。
+- 観測: 未定義 POST は既存の greedy proxy に転送され FastAPI の404になったため、この構成ではパラメーター検証を使用。
+- 公開への反映: apply 完了直後に前の応答を観測。設定の反映後に比較。
+- 未検証: スロットリング・Lambda 統合障害・認証・credentials・検証パスのプリフライト許可。
+
+Gateway の400と FastAPI のエラーを分け、CORS が必要な応答の発生箇所を確認しています。
+
 ## 残タスク TODO
 
-次は Gateway 自身が生成するエラーと Lambda 統合障害の CORS を検証します。アプリが意図的に返す429・502・504は確認済みですが、実際のスロットリング・統合障害は未検証です。
+Gateway のパラメーター検証エラーの CORS は確認済みです。次の候補はスロットリングと Lambda 統合障害です。アプリが意図的に返す429・502・504は確認済みですが、実際のスロットリング・統合障害は未検証です。
 
-### 次のフェーズ：Gateway・Lambda 統合障害の CORS
+### Gateway・Lambda 統合障害の CORS
 
-- [ ] Gateway 自身のエラーを再現する。呼び出し先の不一致・スロットリング等を対象とする。
-- [ ] Gateway が生成するエラー応答に CORS を設定し、許可・未許可 Origin の挙動を確認する。
+- [x] Gateway のパラメーター検証エラーを再現する。
+- [ ] Gateway のスロットリング等、他のエラー種別を検証する。
+- [x] Gateway のパラメーター検証エラーに CORS を設定し、許可・未許可 Origin の挙動を確認する。
 - [ ] Lambda の呼び出し権限不足・タイムアウト・不正な統合応答を再現し、エラー応答と CORS を確認する。
-- [ ] Amplify の画面から、エラー本文を読める場合と CORS による読み取り拒否を確認する。
-- [ ] 障害設定を戻した後の正常応答・再試行を検証し、画面の変化を記録する。
-- [ ] 通信経路・障害発生箇所・CORS の適用範囲を図解し、確認した挙動を PoC に記録する。
+- [x] Amplify のページの Origin から、Gateway の400本文の読み取りと CORS による拒否を確認する。
+- [x] Gateway の400/CORS拒否から正常 GET へ切り替え、画面の変化を記録する。
+- [ ] Lambda 統合障害の設定を戻した後の正常応答・再試行を検証する。
+- [x] Gateway の通信経路・エラー発生箇所・CORS の適用範囲を図解する。
+- [ ] Lambda 統合障害の通信経路・発生箇所・CORS の適用範囲を図解する。
 
 ### ベース構成の追加検証・改善
 

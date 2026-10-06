@@ -379,6 +379,7 @@ terraform -chdir=infra/app apply app.tfplan
 - エラー API: `deployment.auto.tfvars.json` の `enable_error_endpoints` を変更。
 - 追加 Origin: 同ファイルの `allowed_origins` を変更。Hosting の Origin は自動追加。
 - Gateway 定義: 設定変更に合わせ、Terraform の trigger が新しい deployment とステージ切り替えを管理。
+- Gateway のエラー CORS: [設定前後の比較手順](gateway-cors.md#設定前後を比較する手順)を参照。Gateway だけを更新し、イメージや静的成果物の公開は不要。
 - Hosting の rewrite: Terraform の設定更新で反映。既存の静的成果物のアップロードは不要。
 - API / Hosting URL が変わる変更: [接続先変更](#api-の接続先を変更する)も実施。
 
