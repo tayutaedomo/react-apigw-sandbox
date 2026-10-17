@@ -20,6 +20,28 @@ variable "enable_error_endpoints" {
   default     = false
 }
 
+variable "app_log_level" {
+  description = "POWERTOOLS_LOG_LEVEL としてアプリ・Uvicorn に渡すログレベル"
+  type        = string
+  default     = "INFO"
+
+  validation {
+    condition     = contains(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], var.app_log_level)
+    error_message = "app_log_level は DEBUG, INFO, WARNING, ERROR, CRITICAL のいずれかを指定してください。"
+  }
+}
+
+variable "lambda_application_log_level" {
+  description = "Lambda Advanced Logging Controls のアプリケーションログ取得レベル"
+  type        = string
+  default     = "INFO"
+
+  validation {
+    condition     = contains(["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"], var.lambda_application_log_level)
+    error_message = "lambda_application_log_level は TRACE, DEBUG, INFO, WARN, ERROR, FATAL のいずれかを指定してください。"
+  }
+}
+
 variable "allowed_origins" {
   description = "Hosting に加えて許可する Origin の一覧（完全一致。既定は localhost）"
   type        = list(string)

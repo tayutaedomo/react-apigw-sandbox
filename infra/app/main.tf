@@ -87,15 +87,16 @@ resource "aws_lambda_function" "api" {
 
   # アプリと Uvicorn の JSON に加え、Lambda のプラットフォームログも JSON 化する。
   logging_config {
-    log_format            = "JSON"
-    application_log_level = "INFO"
+    log_format = "JSON"
+    # アプリ側の閾値とは独立して、Lambda が取得するレベルを指定する。
+    application_log_level = var.lambda_application_log_level
     system_log_level      = "INFO"
   }
 
   environment {
     variables = {
-      # Uvicorn と HTTP ログの出力レベルをアプリ側でも INFO に揃える。
-      POWERTOOLS_LOG_LEVEL = "INFO"
+      # Uvicorn と HTTP ログに渡すアプリ側の指定値。Powertools は Lambda 側の値を優先する。
+      POWERTOOLS_LOG_LEVEL = var.app_log_level
       # Hosting の Origin は自動で追加し、開発用 Origin と合わせて完全一致で許可する。
       CORS_ALLOW_ORIGINS = jsonencode(local.cors_origins)
       # 検証時だけ意図的なエラー API を公開し、通常は登録しない。
