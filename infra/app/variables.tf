@@ -14,12 +14,6 @@ variable "repository_name" {
   default     = "react-apigw-sandbox-api"
 }
 
-variable "enable_error_endpoints" {
-  description = "FastAPI の意図的なエラー検証 API を有効にする"
-  type        = bool
-  default     = false
-}
-
 variable "app_log_level" {
   description = "POWERTOOLS_LOG_LEVEL としてアプリ・Uvicorn に渡すログレベル"
   type        = string

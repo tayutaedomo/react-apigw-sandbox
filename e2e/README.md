@@ -110,11 +110,11 @@ npm run test:container
 AWS_API_BASE_URL="$(terraform -chdir=../infra/app output -raw api_base_url)" npm run test:aws
 ```
 
-- 前提: [API の Terraform](../infra/app/README.md)を適用し、`enable_error_endpoints=true` に設定済み。
+- 前提: [API のデプロイ](../infra/app/README.md)を完了済み。
 - 起動: frontend のみ。API URL は環境変数で渡し、実 URL をソースに保存しません。
 - サーバー: ローカル backend は起動しません。
 - ケース: 疎通・再試行・呼び出し ID と、エラー時 CORS・プリフライトを確認。
-- エラー API を無効のまま疎通だけ検証: `npm run test:aws -- hello.spec.ts api.spec.ts`。
+- 疎通だけを検証: `npm run test:aws -- hello.spec.ts api.spec.ts`。
 - ローカルモード: AWS 専用ケースは skip。
 - 実行結果: 通常モードと同じ場所へ保存するため、前回のレポートを上書きします。
 
@@ -128,7 +128,7 @@ HOSTING_BASE_URL="$(terraform -chdir=../infra/app output -raw hosting_url)" \
   npm run test:hosting
 ```
 
-- 前提: [frontend の手動デプロイ](../frontend/README.md#amplify-への手動デプロイ)を完了。app の Terraform が Hosting の Origin を許可。エラー API を有効化。
+- 前提: [frontend の手動デプロイ](../frontend/README.md#amplify-への手動デプロイ)を完了。app の Terraform が Hosting の Origin を許可。エラー API は常時利用可能。
 - 起動: ローカルの frontend・backend は起動しません。
 - 接続先: ビルドへ埋め込んだ API URL と `AWS_API_BASE_URL` を一致させます。
 - 検証: 正常応答、通信失敗後の再試行、4xx・5xx本文と相関 ID、429の Retry-After、プリフライトの許可・ヘッダー／メソッド拒否。
@@ -163,7 +163,7 @@ HOSTING_BASE_URL="$(terraform -chdir=../infra/app output -raw hosting_url)" \
   npm run test:hosting -- gateway.spec.ts
 ```
 
-- 前提: app の検証パス `/gateway-probe` と Gateway Response を適用済み。FastAPI のエラー API の有効化は不要。
+- 前提: app の検証パス `/gateway-probe` と Gateway Response を適用済み。FastAPI への呼び出しは不要。
 - 比較: CORS 設定なしの構成では `EXPECT_GATEWAY_CORS=false` を追加。構成変更は [比較手順](../docs/gateway-cors.md#設定前後を比較する手順)を参照。
 - HTTP 結合: GET の400、固定 Origin、エラー種別、Gateway request ID、GET の正常応答。
 - ブラウザー結合: 配信済みページで実 API に fetch し、テスト専用パネルに表示した結果を撮影。React の表示機能の E2E ではありません。

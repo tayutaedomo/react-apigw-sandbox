@@ -11,7 +11,7 @@
   - [Hello World](#hello-world)
   - [CORS](#cors)
 - [エラーレスポンスの CORS 検証](#エラーレスポンスの-cors-検証)
-  - [有効化と操作](#有効化と操作)
+  - [API と操作](#api-と操作)
   - [CORS とログの方針](#cors-とログの方針)
 - [許可 Origin の設定](#許可-origin-の設定)
 - [コンテナのビルドと起動](#コンテナのビルドと起動)
@@ -104,14 +104,14 @@ CORS はブラウザーがレスポンスを読み取れるかの制御です。
 
 ## エラーレスポンスの CORS 検証
 
-### 有効化と操作
+### API と操作
 
-意図的なエラー API は既定では無効です。検証時にだけ有効化して起動します。
+意図的なエラー API は通常の起動で利用できます。
 
 ```sh
-ENABLE_ERROR_ENDPOINTS=true uv run --locked uvicorn app.main:app --reload --host localhost --port 8000
+uv run --locked uvicorn app.main:app --reload --host localhost --port 8000
 # コンテナを使う場合
-ENABLE_ERROR_ENDPOINTS=true docker compose up --no-build
+docker compose up --no-build
 ```
 
 - `GET /errors/http/{status}`: 400・409・418・429・500・502・503・504。429には再試行まで1秒待つ指示の `Retry-After: 1` を付与。
@@ -119,7 +119,6 @@ ENABLE_ERROR_ENDPOINTS=true docker compose up --no-build
 - `GET /errors/unhandled`: 意図的な未処理例外による500。
 - `GET /errors/response-validation`: 戻り値の検証エラーによる500。
 - 標準エラー: 存在しないパスは404、`POST /hello` は405。
-- 無効時: `/errors/` のルートを登録しないため404。
 - ブラウザー操作: [frontend の検証画面](../frontend/README.md#エラーレスポンスの検証)。
 
 ### CORS とログの方針

@@ -8,7 +8,7 @@
 - 全ケースで許可 Origin だけに CORS を付け、credentials は許可しない。
 - 429の Retry-After、500の内部情報非公開、ステータス・ID・例外のログ整合。
 - プリフライト: GET許可、Origin・メソッド・ヘッダーの拒否。
-- 検証 API の既定無効と、許可メソッド外でもサーバーが応答すること。
+- 検証 API の常時公開と、許可メソッド外でもサーバーが応答すること。
 """
 
 from io import StringIO
@@ -36,7 +36,7 @@ CASES = [
 
 @pytest.fixture
 def probe_client():
-    with TestClient(create_app(enable_error_endpoints=True), raise_server_exceptions=False) as client:
+    with TestClient(create_app(), raise_server_exceptions=False) as client:
         yield client
 
 
@@ -101,11 +101,11 @@ def test_preflight_policy(probe_client, origin, method, headers, status, reason)
         assert reason in response.text
 
 
-def test_error_endpoints_are_disabled_by_default():
-    with TestClient(create_app()) as client:
+def test_error_endpoints_are_available_by_default():
+    with TestClient(create_app(), raise_server_exceptions=False) as client:
         assert client.get("/hello").status_code == 200
-        assert client.get("/errors/http/400").status_code == 404
-        assert client.get("/errors/unhandled").status_code == 404
+        assert client.get("/errors/http/400").status_code == 400
+        assert client.get("/errors/unhandled").status_code == 500
 
 
 def test_unsupported_status_is_not_returned(probe_client):

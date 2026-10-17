@@ -99,8 +99,6 @@ resource "aws_lambda_function" "api" {
       POWERTOOLS_LOG_LEVEL = var.app_log_level
       # Hosting の Origin は自動で追加し、開発用 Origin と合わせて完全一致で許可する。
       CORS_ALLOW_ORIGINS = jsonencode(local.cors_origins)
-      # 検証時だけ意図的なエラー API を公開し、通常は登録しない。
-      ENABLE_ERROR_ENDPOINTS = tostring(var.enable_error_endpoints)
       # Web Adapter の readiness 待機を初期化フェーズ内で行う。
       AWS_LWA_ASYNC_INIT = "false"
       # 未処理例外の再送出で Uvicorn は接続を閉じる。閉じた接続を次の呼び出しで
