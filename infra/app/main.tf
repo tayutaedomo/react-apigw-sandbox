@@ -97,6 +97,8 @@ resource "aws_lambda_function" "api" {
     variables = {
       # Uvicorn と HTTP ログに渡すアプリ側の指定値。Powertools は Lambda 側の値を優先する。
       POWERTOOLS_LOG_LEVEL = var.app_log_level
+      # Adapter の DEBUG は認証ヘッダーやクエリを含むため、Rust 側だけ INFO に制限する。
+      RUST_LOG = "info"
       # Hosting の Origin は自動で追加し、開発用 Origin と合わせて完全一致で許可する。
       CORS_ALLOW_ORIGINS = jsonencode(local.cors_origins)
       # Web Adapter の readiness 待機を初期化フェーズ内で行う。

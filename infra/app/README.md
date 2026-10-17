@@ -99,6 +99,7 @@ aws logs tail '/aws/lambda/react-apigw-sandbox-api' --since 10m
 
 - ロググループ: Terraform で明示的に作成し、7日保持。destroy で削除されます。
 - 形式: アプリ・Uvicorn・Lambda プラットフォームの JSON ログ。
+- Adapter のログ: `RUST_LOG=info` で INFO に制限。Lambda の取得レベルを DEBUG にしても、Adapter が認証ヘッダー・クエリを DEBUG ログへ出すことを防ぎます。
 - 追跡: 応答の `X-Request-Id` と `lambda_request_id` を照合。
 - readiness probe: 呼び出しコンテキストがないため、生成 UUID を使用。
 - Web Adapter: 未処理500後に閉じられた接続の再利用を避けるため、接続再利用を無効化。

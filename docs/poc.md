@@ -10,6 +10,7 @@
 - [アプリのエラー時 CORS](#アプリのエラー時-cors)
 - [Amplify Hosting と手動デプロイ](#amplify-hosting-と手動デプロイ)
 - [Gateway のパラメーター検証エラーと CORS](#gateway-のパラメーター検証エラーと-cors)
+- [Lambda のモジュール別ログレベル](#lambda-のモジュール別ログレベル)
 - [残タスク TODO](#残タスク-todo)
 
 ローカルと Amplify Hosting から AWS 上の API まで、確認済みの挙動と検証方法を記録しています。
@@ -179,6 +180,35 @@ Lambda を呼び出さずに Gateway の400を再現し、Gateway Response の C
 - 未検証: スロットリング・Lambda 統合障害・認証・credentials・検証パスのプリフライト許可。
 
 Gateway の400と FastAPI のエラーを分け、CORS が必要な応答の発生箇所を確認しています。
+
+## Lambda のモジュール別ログレベル
+
+2026-10-17 に、FastAPI・Web Adapter 1.1.0・Powertools 3.35.0 のコンテナを Lambda にデプロイし、`GET /logging/probe` の応答と CloudWatch の実ログを照合しました。標準 `logging.getLogger(__name__)` と Powertools の JSON formatter の組み合わせは、Lambda 上でもモジュール別の閾値を維持できました。
+
+### INFO と DEBUG の実測
+
+| Lambda の取得レベル | Powertools 親・子の実効値 | 標準 Logger の実効値 | CloudWatch の比較ログ件数／呼び出し |
+| --- | --- | --- | --- |
+| INFO | 3種類とも INFO | DEBUG / WARNING を維持 | 9件 |
+| DEBUG | 3種類とも DEBUG | DEBUG / WARNING を維持 | 13件 |
+
+- 各設定で2回ずつ呼び出し、応答の `probe_id` とログを照合。同じ設定の2回は同一ログストリームを使用し、各ケース・レベルの重複や混同はありませんでした。
+- INFO 設定では、標準 Logger が出した DEBUG が Lambda 側で除外されました。アプリ側の出力期待値は10件ですが、CloudWatch の実測は9件です。
+- DEBUG 設定では、Powertools に指定した INFO・WARNING より `AWS_LAMBDA_LOG_LEVEL` が優先されました。標準 Logger の WARNING モジュールは WARNING だけを出しました。
+- 比較ログは JSON・UTC のタイムスタンプ・`logger_name` を維持。HTTP 完了ログや Lambda のプラットフォームログは上表の件数に含めません。
+- `/hello` の200、`/errors/http/400` の400、`/errors/unhandled` の500と、その直後の正常復帰を確認。許可 Origin の CORS と `X-Request-Id` も確認しました。
+
+### Web Adapter の DEBUG 出力と対策
+
+Lambda の取得レベルを DEBUG にすると、Web Adapter 自身も DEBUG 出力し、転送先 URL のクエリと Authorization ヘッダーのダミー値を記録しました。アプリのログへリクエストデータを渡さない方針だけでは、Adapter のログは制御できません。
+
+Terraform の Lambda 環境変数に `RUST_LOG=info` を追加し、Adapter の Rust ログを INFO に制限しました。再度 DEBUG 設定で2回呼び出し、比較ログ13件ずつを取得しながら、呼び出し後に取得した CloudWatch ログ全体にダミー値がないことを確認しました。
+
+- 根拠: Adapter の [tracing 初期化](https://github.com/aws/aws-lambda-web-adapter/blob/v1.1.0/src/main.rs)と、Rust runtime の [環境変数による subscriber 設定](https://github.com/aws/aws-lambda-rust-runtime/blob/main/lambda-runtime-api-client/src/tracing.rs)。上記の抑制結果はデプロイ済みバイナリで実測しています。
+- INFO と DEBUG を切り替えるときは、Powertools の指定値に加えて、Lambda と Adapter それぞれの閾値を確認します。
+- 指定値の違いを維持する方式の候補は、標準 Logger のモジュール名による制御と Powertools formatter の組み合わせです。今回の確認範囲は比較 API であり、通常の HTTP Logger の置き換えは未実施です。
+
+操作方法は [モジュールごとのログレベル制御](../backend/README.md#モジュールごとのログレベル制御)を参照してください。
 
 ## 残タスク TODO
 

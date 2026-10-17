@@ -342,7 +342,7 @@ aws logs tail '/aws/lambda/react-apigw-sandbox-api' --since 5m
 
 Powertools 3.35.0 は `AWS_LAMBDA_LOG_LEVEL` をコンストラクタの `level` より優先します。Lambda 側が DEBUG の場合、Powertools の3種類はすべて DEBUG が実効値となり、標準 Logger の2種類はそれぞれの指定値を維持します。この場合、比較ログの期待件数は13件です。未設定時は10件です。ローカルでも `AWS_LAMBDA_LOG_LEVEL=DEBUG` を指定して初期化時の差を再現できますが、CloudWatch でのフィルタリングは AWS 上で確認します。
 
-API は既存の API と同じ認証設定で公開され、呼び出し時に比較ログを出します。Lambda 側の取得レベルは関数全体に適用されます。
+API は既存の API と同じ認証設定で公開され、呼び出し時に比較ログを出します。Lambda 側の取得レベルは関数全体に適用されます。 Web Adapter 自身が DEBUG で認証ヘッダー・クエリを出すことを防ぐため、Terraform で `RUST_LOG=info` を設定し、Adapter のログを INFO に制限しています。実測結果は [Lambda のモジュール別ログレベル](../docs/poc.md#lambda-のモジュール別ログレベル)を参照してください。
 
 ## テスト
 
