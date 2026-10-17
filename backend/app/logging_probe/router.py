@@ -10,11 +10,13 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.logging_probe import powertools_debug, powertools_warning, stdlib_debug, stdlib_warning
+from app.logging_probe.settings import get_probe_levels
 
 SERVICE = "sandbox-api-logger-probe"
+LEVELS = get_probe_levels()
 
 # 初期化はプロセスにつき一度。HTTP 呼び出しごとに handler や Logger 状態を変更しない。
-parent = Logger(service=SERVICE, level="INFO", utc=True, use_rfc3339=True)
+parent = Logger(service=SERVICE, level=LEVELS["powertools_parent"], utc=True, use_rfc3339=True)
 standard_parent = logging.getLogger("app.logging_probe")
 standard_parent.setLevel(logging.INFO)
 standard_parent.propagate = False
@@ -23,11 +25,11 @@ handler.setFormatter(LambdaPowertoolsFormatter(service=SERVICE, utc=True, use_rf
 standard_parent.addHandler(handler)
 
 TARGETS = (
-    ("powertools_parent", parent, "INFO"),
-    ("powertools_debug", powertools_debug.create(SERVICE), "DEBUG"),
-    ("powertools_warning", powertools_warning.create(SERVICE), "WARNING"),
-    ("stdlib_debug", stdlib_debug.create(), "DEBUG"),
-    ("stdlib_warning", stdlib_warning.create(), "WARNING"),
+    ("powertools_parent", parent, LEVELS["powertools_parent"]),
+    ("powertools_debug", powertools_debug.create(SERVICE, LEVELS["powertools_debug"]), LEVELS["powertools_debug"]),
+    ("powertools_warning", powertools_warning.create(SERVICE, LEVELS["powertools_warning"]), LEVELS["powertools_warning"]),
+    ("stdlib_debug", stdlib_debug.create(LEVELS["stdlib_debug"]), LEVELS["stdlib_debug"]),
+    ("stdlib_warning", stdlib_warning.create(LEVELS["stdlib_warning"]), LEVELS["stdlib_warning"]),
 )
 
 router = APIRouter(prefix="/logging", tags=["logging"])

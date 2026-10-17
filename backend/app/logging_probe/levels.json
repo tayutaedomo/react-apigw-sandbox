@@ -1,0 +1,7 @@
+{
+  "powertools_parent": "INFO",
+  "powertools_debug": "DEBUG",
+  "powertools_warning": "WARNING",
+  "stdlib_debug": "DEBUG",
+  "stdlib_warning": "WARNING"
+}

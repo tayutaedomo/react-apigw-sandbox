@@ -1,9 +1,9 @@
-"""DEBUG レベルの標準 Logger を Powertools formatter で出力する。"""
+"""モジュール名を持つ標準 Logger のレベルを設定する。"""
 
 import logging
 
 
-def create() -> logging.Logger:
+def create(level: str) -> logging.Logger:
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(level)
     return logger

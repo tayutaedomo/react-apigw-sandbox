@@ -302,47 +302,101 @@ HTTP の ID 付き JSON と Uvicorn の JSON を標準出力へ集め、共通�
 
 ### モジュールごとのログレベル制御
 
-構造化ログを維持しながら特定モジュールだけログレベルを変えられる方式を選ぶため、`GET /logging/probe` で Powertools の親・子 Logger と標準 `logging.getLogger(__name__)` の出力を比較します。コードは `app/logging_probe/` にあり、既存のコンテナに含まれるため、ローカルと Lambda で同じ API を実行できます。
+構造化ログを維持しながら特定モジュールだけログレベルを変えられる方式を選ぶため、`GET /logging/probe` で Powertools と標準 `logging.getLogger(__name__)` を比較します。`app/logging_probe/` をコンテナに含め、ローカルと Lambda で同じ API を実行します。
 
-ローカルでは通常のサーバー起動で利用できます。
+#### 比較対象と既定値
+
+API は常時利用できます。各呼び出しで、次の5種類の Logger から DEBUG・INFO・WARNING の固定メッセージを出します。
+
+| `case`（設定キー） | Logger | 既定の指定レベル |
+| --- | --- | --- |
+| `powertools_parent` | Powertools 親 | INFO |
+| `powertools_debug` | Powertools 子 | DEBUG |
+| `powertools_warning` | Powertools 子 | WARNING |
+| `stdlib_debug` | 標準 Logger | DEBUG |
+| `stdlib_warning` | 標準 Logger | WARNING |
+
+- 指定値は同梱の `app/logging_probe/levels.json` で管理します。モジュール名の `debug`・`warning` は識別名で、レベルは変更できます。
+- 実効レベルが ERROR 以上の Logger は、WARNING 以下の比較メッセージを出しません。
+- 本文・クエリ文字列・ヘッダーはアプリのログ項目に渡しません。
+
+#### ローカルでの実行
+
+通常のサーバーを起動し、別ターミナルから呼び出します。
 
 ```sh
 .venv/bin/python -m app.server
 ```
 
-別ターミナルから呼び出します。
-
 ```sh
 curl -s http://localhost:8080/logging/probe
 ```
 
-- API は常時登録されます。Docker Compose でも通常の起動で利用できます。イメージは事前に更新します。
-- 各呼び出しで DEBUG・INFO・WARNING の固定メッセージを5種類の Logger から出します。本文・クエリ文字列・ヘッダーはログ項目に渡しません。
-- 応答の `probe_id` で対応する JSON ログを検索し、`logger_case` ごとの出力を照合します。
-- `configured_level` は比較で指定したレベル、`effective_level` は実際の Logger の閾値です。
-- `expected_application_levels` は実効閾値に基づくアプリ側の出力期待値です。CloudWatch へ到達した件数の保証ではありません。
-- JSON ログには `logger_name`・`service`・`level`・UTC の `timestamp` を含めます。リクエスト完了ログは別途1件出ます。
+Docker Compose でも利用できます。コードを更新した場合は、イメージをビルドし直します。
 
-| Logger | 指定レベル | AWS_LAMBDA_LOG_LEVEL 未設定時の出力 |
+#### モジュール別レベルの変更
+
+`app/logging_probe/levels.json` を編集します。設定は JSON オブジェクトで、比較対象の5項目をすべて指定します。
+
+```json
+{
+  "powertools_parent": "INFO",
+  "powertools_debug": "DEBUG",
+  "powertools_warning": "ERROR",
+  "stdlib_debug": "ERROR",
+  "stdlib_warning": "DEBUG"
+}
+```
+
+- 指定可能なレベル: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`。大文字で指定します。
+- 不正な JSON・設定キーの不足や追加・不正なレベルは起動時にエラーにします。
+- ローカルではファイルを変更してサーバーを再起動します。
+- Docker・Lambda では、変更したファイルを含むイメージをビルドして更新します。
+
+#### Lambda の設定と呼び出し
+
+モジュール別設定を含む新しいイメージをデプロイし、Lambda の取得レベルなどは個別 tfvars で指定します。API Gateway は既存の proxy 統合で `/logging/probe` を転送します。
+
+| Terraform の変数 | 設定対象 | 既定値 |
 | --- | --- | --- |
-| Powertools 親 | INFO | INFO・WARNING |
-| Powertools 子（debug モジュール） | DEBUG | DEBUG・INFO・WARNING |
-| Powertools 子（warning モジュール） | WARNING | WARNING |
-| 標準 Logger（debug モジュール） | DEBUG | DEBUG・INFO・WARNING |
-| 標準 Logger（warning モジュール） | WARNING | WARNING |
+| `app_log_level` | 通常の HTTP・Uvicorn ログの指定値 | INFO |
+| `lambda_application_log_level` | 関数全体のログ取得レベル | INFO |
 
-Lambda では新しいイメージをデプロイすると利用できます。API Gateway は既存の proxy 統合で新しいパスを転送します。Terraform の `app_log_level` はアプリ・Uvicorn に渡すレベル、`lambda_application_log_level` は Lambda 側の取得レベルで、どちらも既定は INFO です。DEBUG の比較ログも取得する場合は `lambda_application_log_level = "DEBUG"` を指定します。比較 API のモジュール別指定値は上表の固定値で、`app_log_level` の対象は通常の HTTP ログと Uvicorn です。
+DEBUG の比較ログも取得する設定例です。ビルド・plan・apply は [API 更新の手順](../docs/deployment.md#バックエンドだけを更新する)を参照してください。
+
+```hcl
+lambda_application_log_level = "DEBUG"
+```
+
+`API_BASE_URL` にステージ URL を指定し、API とログを確認します。
 
 ```sh
 curl -s "$API_BASE_URL/logging/probe"
 aws logs tail '/aws/lambda/react-apigw-sandbox-api' --since 5m
 ```
 
-`API_BASE_URL` は配信先のステージ URL を指定します。応答の `probe_id` が一致するログについて、JSON・レベル・各レベル1件ずつの出力を確認します。同じ API を続けて呼び出し、異なる ID のログが混ざらず、handler の追加による重複がないことも確認します。
+#### 応答とログの照合
 
-Powertools 3.35.0 は `AWS_LAMBDA_LOG_LEVEL` をコンストラクタの `level` より優先します。Lambda 側が DEBUG の場合、Powertools の3種類はすべて DEBUG が実効値となり、標準 Logger の2種類はそれぞれの指定値を維持します。この場合、比較ログの期待件数は13件です。未設定時は10件です。ローカルでも `AWS_LAMBDA_LOG_LEVEL=DEBUG` を指定して初期化時の差を再現できますが、CloudWatch でのフィルタリングは AWS 上で確認します。
+| 応答フィールド | 確認する内容 |
+| --- | --- |
+| `probe_id` | 同じ値の JSON ログを検索する |
+| `cases[].configured_level` | 起動時に指定したレベル |
+| `cases[].effective_level` | 実際に適用された Logger の閾値 |
+| `cases[].expected_application_levels` | アプリ側で出力するレベル。Lambda 側の除外前の期待値 |
 
-API は既存の API と同じ認証設定で公開され、呼び出し時に比較ログを出します。Lambda 側の取得レベルは関数全体に適用されます。 Web Adapter 自身が DEBUG で認証ヘッダー・クエリを出すことを防ぐため、Terraform で `RUST_LOG=info` を設定し、Adapter のログを INFO に制限しています。実測結果は [Lambda のモジュール別ログレベル](../docs/poc.md#lambda-のモジュール別ログレベル)を参照してください。
+- JSON ログの `logger_case` で比較対象を識別します。`logger_name`・`service`・`level`・UTC の `timestamp` も確認します。
+- 同じ API を続けて呼び、各 `probe_id` で期待するレベルが1件ずつ出て、重複がないことを確認します。
+- HTTP 完了ログは比較ログとは別に出ます。CloudWatch への到達件数は Lambda 側の取得レベルにも依存します。
+
+#### Lambda 側の優先設定と Adapter の注意点
+
+Powertools 3.35.0 は `AWS_LAMBDA_LOG_LEVEL` をコンストラクタの `level` より優先します。設定ファイルで標準 Logger に ERROR・DEBUG を指定すると、その指定値を維持します。一方、Lambda 側が DEBUG の場合、Powertools は ERROR を指定した子も実効値が DEBUG になります。
+
+- ローカルでも `AWS_LAMBDA_LOG_LEVEL=DEBUG` を指定すると、初期化時の優先関係を再現できます。
+- Lambda 側の取得レベルは関数全体に適用されます。CloudWatch での除外は AWS 上で確認します。
+- Web Adapter 自身の DEBUG が認証ヘッダー・クエリを記録するため、Terraform で `RUST_LOG=info` を設定して Adapter を INFO に制限します。
+
+実測結果は [Lambda のモジュール別ログレベル](../docs/poc.md#lambda-のモジュール別ログレベル)を参照してください。
 
 ## テスト
 
