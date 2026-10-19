@@ -87,19 +87,20 @@ resource "aws_lambda_function" "api" {
 
   # アプリと Uvicorn の JSON に加え、Lambda のプラットフォームログも JSON 化する。
   logging_config {
-    log_format            = "JSON"
-    application_log_level = "INFO"
+    log_format = "JSON"
+    # アプリ側の閾値とは独立して、Lambda が取得するレベルを指定する。
+    application_log_level = var.lambda_application_log_level
     system_log_level      = "INFO"
   }
 
   environment {
     variables = {
-      # Uvicorn と HTTP ログの出力レベルをアプリ側でも INFO に揃える。
-      POWERTOOLS_LOG_LEVEL = "INFO"
+      # 標準 Logger の親（app・uvicorn）に渡す指定値。モジュール別設定はアプリ内で管理する。
+      POWERTOOLS_LOG_LEVEL = var.app_log_level
+      # Adapter の DEBUG は認証ヘッダーやクエリを含むため、Rust 側だけ INFO に制限する。
+      RUST_LOG = "info"
       # Hosting の Origin は自動で追加し、開発用 Origin と合わせて完全一致で許可する。
       CORS_ALLOW_ORIGINS = jsonencode(local.cors_origins)
-      # 検証時だけ意図的なエラー API を公開し、通常は登録しない。
-      ENABLE_ERROR_ENDPOINTS = tostring(var.enable_error_endpoints)
       # Web Adapter の readiness 待機を初期化フェーズ内で行う。
       AWS_LWA_ASYNC_INIT = "false"
       # 未処理例外の再送出で Uvicorn は接続を閉じる。閉じた接続を次の呼び出しで

@@ -17,9 +17,11 @@
 import asyncio
 from io import StringIO
 import json
+import logging
 from uuid import UUID, uuid4
 
-from aws_lambda_powertools import Logger
+from aws_lambda_powertools.logging.formatter import LambdaPowertoolsFormatter
+from app.logging_config import build_log_config, LoggerNameFilter
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
@@ -35,9 +37,21 @@ from app.request_logging import RequestLoggingMiddleware
 def log_stream(monkeypatch):
     monkeypatch.delenv("AWS_LAMBDA_RUNTIME_API", raising=False)
     stream = StringIO()
-    logger = Logger(service=f"test-{uuid4()}", stream=stream)
-    monkeypatch.setattr(request_logging, "logger", logger)
-    return stream
+    formatter_config = build_log_config()["formatters"]["json"]
+    formatter_config.pop("()")
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(LambdaPowertoolsFormatter(**formatter_config))
+    handler.addFilter(LoggerNameFilter())
+    logger = request_logging.logger
+    previous_level = logger.level
+    logger.setLevel(logging.INFO)
+    monkeypatch.setattr(logger, "handlers", [handler])
+    monkeypatch.setattr(logger, "propagate", False)
+    try:
+        yield stream
+    finally:
+        logger.setLevel(previous_level)
+        handler.close()
 
 
 def read_logs(stream):
@@ -52,6 +66,7 @@ def test_success_log_matches_response_and_does_not_leak_request_data(log_stream)
         )
 
     [record] = read_logs(log_stream)
+    assert record["logger_name"] == "app.request_logging"
     assert record["message"] == "HTTP request completed"
     assert record["level"] == "INFO"
     assert record["method"] == "GET"

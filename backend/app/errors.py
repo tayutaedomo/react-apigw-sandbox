@@ -1,4 +1,4 @@
-"""CORS 検証用のエラーを再現する。ENABLE_ERROR_ENDPOINTS=true の場合だけ登録する。"""
+"""CORS 検証用のエラーを再現する。"""
 
 from typing import Annotated
 

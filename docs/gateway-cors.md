@@ -87,7 +87,7 @@ flowchart TD
 以下はリポジトリのルートで実行します。既存の app・Hosting・配信済み画面が必要です。
 
 - AWS: 使用するプロファイルで SSO ログイン済み。
-- 既存設定: 個別 tfvars で、現在の `enable_error_endpoints`・`allowed_origins` などを維持。
+- 既存設定: 個別 tfvars で、現在の `allowed_origins` などを維持。
 - イメージ: `infra/app/image-uri.txt` に現在デプロイしている digest を設定。
 - 依存: e2e の npm 依存と Chromium をセットアップ済み。
 - 変更範囲: [AWS 設定だけの更新](deployment.md#aws-の設定だけを変更する)。Docker のビルド・push、画面の再ビルド・再公開は不要。

@@ -1,15 +1,16 @@
 """HTTP の処理結果を記録し、Lambda またはローカルの ID で追跡する。"""
 
 import json
+import logging
 from time import perf_counter
 from uuid import UUID, uuid4
 
-from aws_lambda_powertools import Logger
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.server import get_log_level
+from app.logging_config import configure_logging
 
-logger = Logger(service="sandbox-api", utc=True, use_rfc3339=True, level=get_log_level())
+configure_logging()
+logger = logging.getLogger(__name__)
 
 
 def request_id(scope: Scope) -> tuple[str, str]:

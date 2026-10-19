@@ -31,7 +31,7 @@ flowchart LR
 - フロントエンド: React + TypeScript 7 + Vite+。
 - バックエンド: FastAPI + Uvicorn。
 - コンテナ: Lambda Web Adapter を同梱した `linux/amd64` イメージ。ローカルでは Uvicorn に直接アクセス。
-- ログ: Powertools for AWS Lambda による JSON ログ。
+- ログ: 標準 logging と Powertools formatter による JSON ログ。
 - ブラウザー・HTTP 結合テスト: Playwright。画面操作は Chromium を使用。
 - Vite プロキシ: 使用せず、別 Origin の通信を検証。
 

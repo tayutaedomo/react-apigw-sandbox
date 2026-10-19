@@ -21,7 +21,7 @@ def test_default_origin(monkeypatch):
 def test_additional_origin_receives_cors(monkeypatch, path, status):
     origin = "https://sandbox.example.com"
     monkeypatch.setenv("CORS_ALLOW_ORIGINS", json.dumps(["http://localhost:5173", origin]))
-    with TestClient(create_app(enable_error_endpoints=True), raise_server_exceptions=False) as client:
+    with TestClient(create_app(), raise_server_exceptions=False) as client:
         response = client.get(path, headers={"Origin": origin})
         denied = client.get(path, headers={"Origin": "https://other.example.com"})
     assert response.status_code == status

@@ -4,13 +4,31 @@
 
 - [概要](#概要)
 - [開発環境](#開発環境)
+  - [必要なツール](#必要なツール)
+  - [セットアップ](#セットアップ)
 - [起動と API の確認](#起動と-api-の確認)
+  - [開発サーバー](#開発サーバー)
+  - [Hello World](#hello-world)
+  - [CORS](#cors)
 - [エラーレスポンスの CORS 検証](#エラーレスポンスの-cors-検証)
+  - [API と操作](#api-と操作)
+  - [CORS とログの方針](#cors-とログの方針)
 - [許可 Origin の設定](#許可-origin-の設定)
 - [コンテナのビルドと起動](#コンテナのビルドと起動)
+  - [イメージのビルド](#イメージのビルド)
+  - [ローカルコンテナの起動](#ローカルコンテナの起動)
+  - [実行イメージと権限](#実行イメージと権限)
 - [ECR への push](#ecr-への-push)
+  - [前提と方針](#前提と方針)
+  - [実行コマンド](#実行コマンド)
 - [構造化ログ](#構造化ログ)
+  - [HTTP リクエストの記録](#http-リクエストの記録)
+  - [コンテナログの確認](#コンテナログの確認)
+  - [共通ログ設定とログレベル](#共通ログ設定とログレベル)
+  - [モジュールごとのログレベル制御](#モジュールごとのログレベル制御)
 - [テスト](#テスト)
+  - [実行コマンド](#実行コマンド)
+  - [確認する内容](#確認する内容)
 - [操作のまとめ](#操作のまとめ)
 
 ## 概要
@@ -20,7 +38,7 @@ FastAPI で Hello World と、設定で有効化するエラー検証 API を提
 - FastAPI: API と OpenAPI ドキュメント。
 - Uvicorn: ローカルの HTTP サーバー。
 - uv: 仮想環境と依存の管理。
-- Powertools for AWS Lambda: HTTP リクエストと例外の JSON ログ。
+- 標準 logging と Powertools formatter: HTTP リクエストと例外の JSON ログ。
 - pytest / httpx2: API テスト。
 
 以下のコマンドは、すべて `backend/` 内で実行します。
@@ -86,14 +104,14 @@ CORS はブラウザーがレスポンスを読み取れるかの制御です。
 
 ## エラーレスポンスの CORS 検証
 
-### 有効化と操作
+### API と操作
 
-意図的なエラー API は既定では無効です。検証時にだけ有効化して起動します。
+意図的なエラー API は通常の起動で利用できます。
 
 ```sh
-ENABLE_ERROR_ENDPOINTS=true uv run --locked uvicorn app.main:app --reload --host localhost --port 8000
+uv run --locked uvicorn app.main:app --reload --host localhost --port 8000
 # コンテナを使う場合
-ENABLE_ERROR_ENDPOINTS=true docker compose up --no-build
+docker compose up --no-build
 ```
 
 - `GET /errors/http/{status}`: 400・409・418・429・500・502・503・504。429には再試行まで1秒待つ指示の `Retry-After: 1` を付与。
@@ -101,7 +119,6 @@ ENABLE_ERROR_ENDPOINTS=true docker compose up --no-build
 - `GET /errors/unhandled`: 意図的な未処理例外による500。
 - `GET /errors/response-validation`: 戻り値の検証エラーによる500。
 - 標準エラー: 存在しないパスは404、`POST /hello` は405。
-- 無効時: `/errors/` のルートを登録しないため404。
 - ブラウザー操作: [frontend の検証画面](../frontend/README.md#エラーレスポンスの検証)。
 
 ### CORS とログの方針
@@ -224,9 +241,10 @@ API 更新全体の操作順序は [バックエンドの更新手順](../docs/d
 
 ### HTTP リクエストの記録
 
-Powertools の Logger で、リクエスト完了・例外を JSON として標準出力へ記録します。
+`logging.getLogger(__name__)` と Powertools の JSON formatter で、リクエスト完了・例外を標準出力へ記録します。
 
 - `service`: `sandbox-api`。
+- `logger_name`: 出力元のモジュール名。HTTP ログは `app.request_logging`。
 - `method` / `path`: HTTP メソッドとパス。
 - `status_code`: HTTP ステータス。
 - `duration_ms`: 処理時間（ミリ秒）。
@@ -252,36 +270,148 @@ docker compose logs --follow api
 ```
 
 - HTTP ログ: `app/request_logging.py` のミドルウェアで記録。
-- Uvicorn の起動・終了ログ: `app/server.py` で Powertools の JSON formatter を使用。
+- Uvicorn の起動・終了ログ: `app/logging.json` の共通設定で Powertools の JSON formatter を使用。
 - Uvicorn の標準アクセスログ: HTTP ログとの重複を避けるためコンテナでは無効化。
-- 開発用の `uvicorn --reload`: アプリの HTTP ログは JSON、Uvicorn 自体のログは標準形式。
+- 開発用の `uvicorn --reload`: アプリと worker のログに共通設定を適用。reloader プロセスのログは Uvicorn の標準形式。
 
 アプリの動作と相関 ID は HTTP ログ、サーバーの起動状態は Uvicorn ログで確認します。
 
-### Uvicorn の JSON 化とログレベル
+### 共通ログ設定とログレベル
 
-`app.server` から起動すると、Uvicorn の起動・終了・エラーログも JSON になります。
+`app/logging.json` で、通常のアプリログと Uvicorn の Logger・handler・formatter を管理します。起動時に `app/logging_config.py` が読み込み、標準 `logging.config.dictConfig()` で適用します。
 
-- 変更前の例: `INFO: Started server process [1]`。
-- 変更後の主なフィールド: `level`, `message`, `timestamp`, `service`。HTTP 固有の情報はミドルウェアのログにのみ含みます。
-- formatter: Powertools が Python の LogRecord を JSON へ変換。
-- handler: 変換したログを標準出力へ送信。
-- logger: `uvicorn.error` から `uvicorn` へ伝播させ、1回だけ出力。
-- access log: 二重記録を避け、HTTP の記録はミドルウェアに集約。
+- `app`: アプリの親 Logger。既定は INFO。各モジュールは `logging.getLogger(__name__)` で取得します。
+- `uvicorn`: サーバーログの親 Logger。既定は INFO。`uvicorn.error` は親からレベルを継承します。
+- JSON formatter: `service`, `logger_name`, `level`, `timestamp` などを付与します。
+- 出力先: 標準出力。親への伝播を止め、同じログの二重出力を防ぎます。
+- アクセスログ: HTTP ミドルウェアに集約するため、Uvicorn 側は無効化します。
+
+#### モジュール別の設定
+
+特定モジュールだけ DEBUG にする場合は、`app/logging.json` の `loggers` に次の項目を追加します。handler を指定せず、`app` の JSON 出力を利用します。
+
+```json
+"app.request_logging": {"level": "DEBUG"}
+```
+
+- 個別指定がないモジュールは `app` のレベルを継承します。
+- 個別指定は親のレベルより優先されます。親が INFO でも、このモジュールからの DEBUG は出力されます。
+- HTTP ミドルウェアは正常応答を INFO、未処理例外を ERROR で記録します。DEBUG 指定で正常ログの内容が増えるわけではありません。
+- 変更の反映: ローカルではサーバー再起動、Docker・Lambda ではイメージを再ビルドして更新します。
+
+#### 全体レベルの上書き
+
+環境変数 `POWERTOOLS_LOG_LEVEL` は、親 Logger の `app` と `uvicorn` のレベルを上書きします。名前は既存設定を継続して使用します。ファイル内のモジュール別指定値は維持します。
 
 ```sh
 POWERTOOLS_LOG_LEVEL=WARNING docker compose up --no-build
-# Docker を使わず同じ JSON 設定で起動する場合（ポート 8080）
 POWERTOOLS_LOG_LEVEL=DEBUG uv run --locked python -m app.server
 ```
 
-- 既定: `INFO`。
-- 許可値: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`。
-- `WARNING`: 正常リクエストと INFO の起動ログを抑制。ERROR の例外ログは出力。
-- 不正な値: 起動時にエラーにして、設定の誤りを明示。
-- `uvicorn --reload` を直接起動する場合: このサーバー設定を通らず、Uvicorn 自体は標準形式。
+- 許可値: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`。不正な値は起動時にエラーにします。
+- 未指定時: `app/logging.json` の設定を使います。
+- Lambda: `app_log_level` をこの環境変数に渡します。`lambda_application_log_level` は別途、CloudWatch に送るレベルを制限します。
+- 標準 Logger は `AWS_LAMBDA_LOG_LEVEL` でモジュール別設定を上書きしません。ただし、出した DEBUG ログも Lambda 側が INFO なら除外されます。
 
-HTTP の ID 付き JSON と Uvicorn の JSON を標準出力へ集め、共通の環境変数で出力量を切り替えます。設定形式は [Uvicorn の Logging 設定](https://www.uvicorn.org/settings/#logging)を参照してください。
+`app.server` は Uvicorn 起動前に共通設定を適用します。直接 `uvicorn app.main:app` で起動した場合も、アプリの初期化時に適用します。Python の `warnings.warn()` による警告の取り込みは対象外です。
+
+### モジュールごとのログレベル制御
+
+構造化ログを維持しながら特定モジュールだけログレベルを変えられる方式を選ぶため、`GET /logging/probe` で Powertools と標準 `logging.getLogger(__name__)` を比較します。`app/logging_probe/` をコンテナに含め、ローカルと Lambda で同じ API を実行します。
+
+#### 比較対象と既定値
+
+API は常時利用できます。各呼び出しで、次の5種類の Logger から DEBUG・INFO・WARNING の固定メッセージを出します。
+
+| `case`（設定キー） | Logger | 既定の指定レベル |
+| --- | --- | --- |
+| `powertools_parent` | Powertools 親 | INFO |
+| `powertools_debug` | Powertools 子 | DEBUG |
+| `powertools_warning` | Powertools 子 | WARNING |
+| `stdlib_debug` | 標準 Logger | DEBUG |
+| `stdlib_warning` | 標準 Logger | WARNING |
+
+- 指定値は同梱の `app/logging_probe/levels.json` で管理します。モジュール名の `debug`・`warning` は識別名で、レベルは変更できます。
+- 実効レベルが ERROR 以上の Logger は、WARNING 以下の比較メッセージを出しません。
+- 本文・クエリ文字列・ヘッダーはアプリのログ項目に渡しません。
+
+#### ローカルでの実行
+
+通常のサーバーを起動し、別ターミナルから呼び出します。
+
+```sh
+.venv/bin/python -m app.server
+```
+
+```sh
+curl -s http://localhost:8080/logging/probe
+```
+
+Docker Compose でも利用できます。コードを更新した場合は、イメージをビルドし直します。
+
+#### モジュール別レベルの変更
+
+`app/logging_probe/levels.json` を編集します。設定は JSON オブジェクトで、比較対象の5項目をすべて指定します。
+
+```json
+{
+  "powertools_parent": "INFO",
+  "powertools_debug": "DEBUG",
+  "powertools_warning": "ERROR",
+  "stdlib_debug": "ERROR",
+  "stdlib_warning": "DEBUG"
+}
+```
+
+- 指定可能なレベル: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`。大文字で指定します。
+- 不正な JSON・設定キーの不足や追加・不正なレベルは起動時にエラーにします。
+- ローカルではファイルを変更してサーバーを再起動します。
+- Docker・Lambda では、変更したファイルを含むイメージをビルドして更新します。
+
+#### Lambda の設定と呼び出し
+
+モジュール別設定を含む新しいイメージをデプロイし、Lambda の取得レベルなどは個別 tfvars で指定します。API Gateway は既存の proxy 統合で `/logging/probe` を転送します。
+
+| Terraform の変数 | 設定対象 | 既定値 |
+| --- | --- | --- |
+| `app_log_level` | 通常の HTTP・Uvicorn ログの指定値 | INFO |
+| `lambda_application_log_level` | 関数全体のログ取得レベル | INFO |
+
+DEBUG の比較ログも取得する設定例です。ビルド・plan・apply は [API 更新の手順](../docs/deployment.md#バックエンドだけを更新する)を参照してください。
+
+```hcl
+lambda_application_log_level = "DEBUG"
+```
+
+`API_BASE_URL` にステージ URL を指定し、API とログを確認します。
+
+```sh
+curl -s "$API_BASE_URL/logging/probe"
+aws logs tail '/aws/lambda/react-apigw-sandbox-api' --since 5m
+```
+
+#### 応答とログの照合
+
+| 応答フィールド | 確認する内容 |
+| --- | --- |
+| `probe_id` | 同じ値の JSON ログを検索する |
+| `cases[].configured_level` | 起動時に指定したレベル |
+| `cases[].effective_level` | 実際に適用された Logger の閾値 |
+| `cases[].expected_application_levels` | アプリ側で出力するレベル。Lambda 側の除外前の期待値 |
+
+- JSON ログの `logger_case` で比較対象を識別します。`logger_name`・`service`・`level`・UTC の `timestamp` も確認します。
+- 同じ API を続けて呼び、各 `probe_id` で期待するレベルが1件ずつ出て、重複がないことを確認します。
+- HTTP 完了ログは比較ログとは別に出ます。CloudWatch への到達件数は Lambda 側の取得レベルにも依存します。
+
+#### Lambda 側の優先設定と Adapter の注意点
+
+Powertools 3.35.0 は `AWS_LAMBDA_LOG_LEVEL` をコンストラクタの `level` より優先します。設定ファイルで標準 Logger に ERROR・DEBUG を指定すると、その指定値を維持します。一方、Lambda 側が DEBUG の場合、Powertools は ERROR を指定した子も実効値が DEBUG になります。
+
+- ローカルでも `AWS_LAMBDA_LOG_LEVEL=DEBUG` を指定すると、初期化時の優先関係を再現できます。
+- Lambda 側の取得レベルは関数全体に適用されます。CloudWatch での除外は AWS 上で確認します。
+- Web Adapter 自身の DEBUG が認証ヘッダー・クエリを記録するため、Terraform で `RUST_LOG=info` を設定して Adapter を INFO に制限します。
+
+実測結果は [Lambda のモジュール別ログレベル](../docs/poc.md#lambda-のモジュール別ログレベル)を参照してください。
 
 ## テスト
 

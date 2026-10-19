@@ -88,21 +88,20 @@ mkdir -p .deployment
 
 ### 更新を通して保持する設定
 
-エラー API の有効状態と追加 Origin は、Git 管理外の `infra/app/deployment.auto.tfvars.json` で保持します。毎回フラグを付け忘れて設定が変わることを避けます。
+追加 Origin などの継続する設定は、Git 管理外の `infra/app/deployment.auto.tfvars.json` で保持します。エラー API は常時利用できます。
 
 この PoC でエラー時 CORS を検証する設定例です。初回構築時は、次の内容を `infra/app/deployment.auto.tfvars.json` に保存します。既存環境では下記の確認コマンドで現在の設定を確認してから作成し、既存ファイルは上書きしません。
 
 ```json
 {
-  "enable_error_endpoints": true,
   "allowed_origins": ["http://localhost:5173"]
 }
 ```
 
 - Hosting の Origin: Terraform が自動追加。ファイルへ転記しません。
-- `enable_error_endpoints=false`: 意図的なエラー API を公開しない設定。
 - 既存の個別 tfvars がある場合: その設定を維持し、同じ変数を複数のファイルへ重複定義しません。
-- 設定ファイルをまだ作っていない既存環境: 下記で現在の Lambda 設定を確認し、有効状態と追加 Origin を引き継いでから作成。
+- 旧設定からの更新: 個別 tfvars の `enable_error_endpoints` を削除します。常時登録する新しい API イメージへの更新と、Terraform による旧環境変数の削除を同じ更新で行います。旧イメージのまま環境変数だけ削除すると、旧コードではエラー API が無効になります。
+- 設定ファイルをまだ作っていない既存環境: 下記で現在の Lambda 設定を確認し、追加 Origin を引き継いでから作成。
 - `CORS_ALLOW_ORIGINS` から引き継ぐ際: Hosting の Origin は除き、localhost 等の追加 Origin だけを `allowed_origins` へ記載。
 - `image_uri`: このファイルには含めず、plan スクリプトで digest を指定。
 
@@ -112,7 +111,7 @@ aws lambda get-function-configuration \
   --query 'Environment.Variables' --output json
 ```
 
-設定を持たず既定値だけで plan すると、エラー API は無効になります。更新前に継続する設定を明示します。
+更新前に追加 Origin などの継続する設定を明示します。
 
 ## 初回に環境全体を構築する
 
@@ -182,7 +181,7 @@ node frontend/scripts/deploy-hosting.mjs
 
 - app の output に API URL と Hosting URL がある。
 - Amplify の手動公開が成功し、配信済み画面から Hello World を取得できる。
-- エラー API を有効にした場合はエラー本文・ヘッダー・プリフライトも確認。
+- エラー本文・ヘッダー・プリフライトも確認。
 
 初回だけ ECR を作成し、以後は変更対象ごとの更新手順を使います。
 
@@ -376,14 +375,14 @@ terraform -chdir=infra/app apply app.tfplan
 ```
 
 - plan の確認: 変更した設定だけが対象になり、image URI が維持されること。
-- エラー API: `deployment.auto.tfvars.json` の `enable_error_endpoints` を変更。
+- ログレベル: 同ファイルの `app_log_level`・`lambda_application_log_level` を変更。
 - 追加 Origin: 同ファイルの `allowed_origins` を変更。Hosting の Origin は自動追加。
 - Gateway 定義: 設定変更に合わせ、Terraform の trigger が新しい deployment とステージ切り替えを管理。
 - Gateway のエラー CORS: [設定前後の比較手順](gateway-cors.md#設定前後を比較する手順)を参照。Gateway だけを更新し、イメージや静的成果物の公開は不要。
 - Hosting の rewrite: Terraform の設定更新で反映。既存の静的成果物のアップロードは不要。
 - API / Hosting URL が変わる変更: [接続先変更](#api-の接続先を変更する)も実施。
 
-3. [デプロイ後の確認](#デプロイ後に確認する)を実施します。エラー API を無効にした場合は正常系の確認を使います。
+3. [デプロイ後の確認](#デプロイ後に確認する)を実施します。
 
 設定だけの変更では、既存イメージと静的成果物を使い続けます。
 
@@ -631,7 +630,7 @@ aws amplify list-jobs \
 
 通常は、配信済みの画面と実 API の両方を Playwright で確認します。
 
-エラー API を有効にしている場合:
+エラー API を含む結合確認:
 
 ```sh
 AWS_API_BASE_URL="$(terraform -chdir=infra/app output -raw api_base_url)" \
@@ -639,7 +638,7 @@ HOSTING_BASE_URL="$(terraform -chdir=infra/app output -raw hosting_url)" \
   npm --prefix e2e run test:hosting
 ```
 
-エラー API を無効にしている場合は、正常系・静的配信・直接アクセスだけを選びます。
+疎通だけを確認する場合は、正常系・静的配信・直接アクセスを選びます。
 
 ```sh
 AWS_API_BASE_URL="$(terraform -chdir=infra/app output -raw api_base_url)" \

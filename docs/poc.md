@@ -10,6 +10,7 @@
 - [アプリのエラー時 CORS](#アプリのエラー時-cors)
 - [Amplify Hosting と手動デプロイ](#amplify-hosting-と手動デプロイ)
 - [Gateway のパラメーター検証エラーと CORS](#gateway-のパラメーター検証エラーと-cors)
+- [Lambda のモジュール別ログレベル](#lambda-のモジュール別ログレベル)
 - [残タスク TODO](#残タスク-todo)
 
 ローカルと Amplify Hosting から AWS 上の API まで、確認済みの挙動と検証方法を記録しています。
@@ -179,6 +180,34 @@ Lambda を呼び出さずに Gateway の400を再現し、Gateway Response の C
 - 未検証: スロットリング・Lambda 統合障害・認証・credentials・検証パスのプリフライト許可。
 
 Gateway の400と FastAPI のエラーを分け、CORS が必要な応答の発生箇所を確認しています。
+
+## Lambda のモジュール別ログレベル
+
+標準 `logging.getLogger(__name__)` と Powertools の JSON formatter を組み合わせると、Lambda 上でもモジュール別の閾値を維持できます。一方、Powertools 3.35.0 の Logger は、モジュール別の指定値より `AWS_LAMBDA_LOG_LEVEL` を優先します。
+
+### INFO と DEBUG の実測
+
+FastAPI・Web Adapter 1.1.0・Powertools 3.35.0 の構成で、`GET /logging/probe` の既定の指定値を使った場合の結果です。
+
+| Lambda の取得レベル | Powertools 親・子の実効値 | 標準 Logger の実効値 | CloudWatch の比較ログ件数／呼び出し |
+| --- | --- | --- | --- |
+| INFO | 3種類とも INFO | DEBUG / WARNING を維持 | 9件 |
+| DEBUG | 3種類とも DEBUG | DEBUG / WARNING を維持 | 13件 |
+
+- INFO 設定では、標準 Logger の実効値が DEBUG でも、その DEBUG ログは Lambda 側で除外されます。
+- DEBUG 設定では、Powertools に INFO・WARNING を指定しても実効値は DEBUG になります。標準 Logger の WARNING 指定は維持されます。
+- 上表の件数は比較用メッセージのみです。HTTP 完了ログと Lambda のプラットフォームログは含みません。
+
+モジュールごとの指定値を維持するには、アプリ側の Logger 設定に加えて、必要なログを Lambda 側の取得レベルで除外しないことが必要です。設定ファイルと比較 API の使い方は [モジュールごとのログレベル制御](../backend/README.md#モジュールごとのログレベル制御)を参照してください。
+
+### Web Adapter の DEBUG 出力と対策
+
+Web Adapter 1.1.0 は Lambda の取得レベルを DEBUG にすると、自身も DEBUG ログを出し、転送先 URL のクエリと Authorization ヘッダーを記録します。アプリ側でリクエストデータをログに渡さないだけでは、この出力を防げません。
+
+Terraform で Lambda 環境変数に `RUST_LOG=info` を設定し、Adapter の Rust ログを INFO に制限します。この設定では、アプリの DEBUG ログを取得しながら、Adapter によるヘッダー・クエリの DEBUG 出力を抑制できます。
+
+- 実装の参照先: Adapter の [tracing 初期化](https://github.com/aws/aws-lambda-web-adapter/blob/v1.1.0/src/main.rs)と Rust runtime の [subscriber 設定](https://github.com/aws/aws-lambda-rust-runtime/blob/main/lambda-runtime-api-client/src/tracing.rs)。
+- ログレベルを切り替える際は、アプリの指定値、Lambda の取得レベル、Adapter の出力レベルを確認します。
 
 ## 残タスク TODO
 

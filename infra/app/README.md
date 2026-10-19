@@ -61,7 +61,8 @@ export AWS_PROFILE='<使用するプロファイル>'
 | --- | --- | --- |
 | `image_uri` | 実行するコンテナ | `image-uri.txt` または plan スクリプトの引数。digest 必須 |
 | `repository_name` | 既存 ECR の照会 | `react-apigw-sandbox-api` |
-| `enable_error_endpoints` | 意図的なエラー API の有効化 | `false`。検証で有効にした状態は個別 tfvars で継続保持 |
+| `app_log_level` | アプリ・Uvicorn に渡すログレベル | `INFO`。`POWERTOOLS_LOG_LEVEL` に設定 |
+| `lambda_application_log_level` | Lambda 側のアプリケーションログ取得レベル | `INFO`。DEBUG の比較には `DEBUG` を指定。Powertools ではコンストラクタの指定より優先 |
 | `enable_gateway_error_cors` | Gateway の必須クエリ欠落400への CORS | `true`。`false` は設定前後の比較用 |
 | `allowed_origins` | Hosting 以外に許可する Origin | `http://localhost:5173`。Hosting は自動追加 |
 
@@ -88,7 +89,6 @@ HOSTING_BASE_URL="$(terraform -chdir=../infra/app output -raw hosting_url)" \
 
 - ブラウザー: 配信済み画面の正常・エラー応答、CORS、プリフライト、再試行。
 - HTTP 結合: 配信ファイル・ステータス・Lambda の Request ID。画面キャプチャは対象外。
-- エラーケースの前提: `enable_error_endpoints=true`。
 - localhost → AWS の検証: [e2e の手順](../../e2e/README.md#aws-上の-api-を使ったテスト)を参照。
 
 ### CloudWatch の確認と接続方針
@@ -99,11 +99,13 @@ aws logs tail '/aws/lambda/react-apigw-sandbox-api' --since 10m
 
 - ロググループ: Terraform で明示的に作成し、7日保持。destroy で削除されます。
 - 形式: アプリ・Uvicorn・Lambda プラットフォームの JSON ログ。
+- Adapter のログ: `RUST_LOG=info` で INFO に制限。Lambda の取得レベルを DEBUG にしても、Adapter が認証ヘッダー・クエリを DEBUG ログへ出すことを防ぎます。
 - 追跡: 応答の `X-Request-Id` と `lambda_request_id` を照合。
 - readiness probe: 呼び出しコンテキストがないため、生成 UUID を使用。
 - Web Adapter: 未処理500後に閉じられた接続の再利用を避けるため、接続再利用を無効化。
 - トレードオフ: 毎回ローカル TCP 接続を作成。性能への影響は未測定。本番採用は別途判断。
 - 通信経路: [接続再利用の図解](../../docs/connection-reuse.md)。Lambda 実行環境の再利用は維持。
+- ログ比較 API: [モジュールごとのログレベル制御](../../backend/README.md#モジュールごとのログレベル制御)を参照。新しいイメージのデプロイ後は常時利用できます。DEBUG ログの取得には `lambda_application_log_level = "DEBUG"` を指定します。
 - Gateway の実行ログ: 未設定。アカウント全体のログ用 role 設定は変更しません。
 
 ## 既存環境の state 移行

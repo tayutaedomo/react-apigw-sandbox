@@ -61,7 +61,7 @@ API 呼び出しを確認する前に、別ターミナルでバックエンド�
 
 「エラーレスポンスの CORS 検証」でケースを選び、実 API のエラー応答を確認できます。
 
-- 前提: backend の `ENABLE_ERROR_ENDPOINTS=true`。AWS では [API の設定](../infra/app/README.md#入力の方針)を使用。
+- 前提: backend を起動済み、または AWS に API をデプロイ済み。エラー API は常時利用できます。
 - 読み取り成功: HTTP ステータス・本文・Request ID、429では Retry-After を表示。
 - 読み取り失敗: CORS または通信状態の確認を案内。fetch の例外だけでは原因を断定しません。
 - プリフライト: 許可 GET、未許可ヘッダー、未許可 PUT を選択可能。
