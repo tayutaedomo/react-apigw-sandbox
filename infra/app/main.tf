@@ -95,7 +95,7 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      # Uvicorn と HTTP ログに渡すアプリ側の指定値。Powertools は Lambda 側の値を優先する。
+      # 標準 Logger の親（app・uvicorn）に渡す指定値。モジュール別設定はアプリ内で管理する。
       POWERTOOLS_LOG_LEVEL = var.app_log_level
       # Adapter の DEBUG は認証ヘッダーやクエリを含むため、Rust 側だけ INFO に制限する。
       RUST_LOG = "info"

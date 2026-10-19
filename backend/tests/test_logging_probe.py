@@ -25,7 +25,7 @@ if len(sys.argv) > 1:
     settings.CONFIG_PATH = Path(sys.argv[1])
 from logging.config import dictConfig
 from fastapi.testclient import TestClient
-from app.server import build_log_config
+from app.logging_config import build_log_config
 dictConfig(build_log_config())
 from app.main import app
 with TestClient(app) as client:

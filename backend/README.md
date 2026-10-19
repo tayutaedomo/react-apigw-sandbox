@@ -24,7 +24,7 @@
 - [構造化ログ](#構造化ログ)
   - [HTTP リクエストの記録](#http-リクエストの記録)
   - [コンテナログの確認](#コンテナログの確認)
-  - [Uvicorn の JSON 化とログレベル](#uvicorn-の-json-化とログレベル)
+  - [共通ログ設定とログレベル](#共通ログ設定とログレベル)
   - [モジュールごとのログレベル制御](#モジュールごとのログレベル制御)
 - [テスト](#テスト)
   - [実行コマンド](#実行コマンド)
@@ -38,7 +38,7 @@ FastAPI で Hello World と、設定で有効化するエラー検証 API を提
 - FastAPI: API と OpenAPI ドキュメント。
 - Uvicorn: ローカルの HTTP サーバー。
 - uv: 仮想環境と依存の管理。
-- Powertools for AWS Lambda: HTTP リクエストと例外の JSON ログ。
+- 標準 logging と Powertools formatter: HTTP リクエストと例外の JSON ログ。
 - pytest / httpx2: API テスト。
 
 以下のコマンドは、すべて `backend/` 内で実行します。
@@ -241,9 +241,10 @@ API 更新全体の操作順序は [バックエンドの更新手順](../docs/d
 
 ### HTTP リクエストの記録
 
-Powertools の Logger で、リクエスト完了・例外を JSON として標準出力へ記録します。
+`logging.getLogger(__name__)` と Powertools の JSON formatter で、リクエスト完了・例外を標準出力へ記録します。
 
 - `service`: `sandbox-api`。
+- `logger_name`: 出力元のモジュール名。HTTP ログは `app.request_logging`。
 - `method` / `path`: HTTP メソッドとパス。
 - `status_code`: HTTP ステータス。
 - `duration_ms`: 処理時間（ミリ秒）。
@@ -269,36 +270,50 @@ docker compose logs --follow api
 ```
 
 - HTTP ログ: `app/request_logging.py` のミドルウェアで記録。
-- Uvicorn の起動・終了ログ: `app/server.py` で Powertools の JSON formatter を使用。
+- Uvicorn の起動・終了ログ: `app/logging.json` の共通設定で Powertools の JSON formatter を使用。
 - Uvicorn の標準アクセスログ: HTTP ログとの重複を避けるためコンテナでは無効化。
-- 開発用の `uvicorn --reload`: アプリの HTTP ログは JSON、Uvicorn 自体のログは標準形式。
+- 開発用の `uvicorn --reload`: アプリと worker のログに共通設定を適用。reloader プロセスのログは Uvicorn の標準形式。
 
 アプリの動作と相関 ID は HTTP ログ、サーバーの起動状態は Uvicorn ログで確認します。
 
-### Uvicorn の JSON 化とログレベル
+### 共通ログ設定とログレベル
 
-`app.server` から起動すると、Uvicorn の起動・終了・エラーログも JSON になります。
+`app/logging.json` で、通常のアプリログと Uvicorn の Logger・handler・formatter を管理します。起動時に `app/logging_config.py` が読み込み、標準 `logging.config.dictConfig()` で適用します。
 
-- 変更前の例: `INFO: Started server process [1]`。
-- 変更後の主なフィールド: `level`, `message`, `timestamp`, `service`。HTTP 固有の情報はミドルウェアのログにのみ含みます。
-- formatter: Powertools が Python の LogRecord を JSON へ変換。
-- handler: 変換したログを標準出力へ送信。
-- logger: `uvicorn.error` から `uvicorn` へ伝播させ、1回だけ出力。
-- access log: 二重記録を避け、HTTP の記録はミドルウェアに集約。
+- `app`: アプリの親 Logger。既定は INFO。各モジュールは `logging.getLogger(__name__)` で取得します。
+- `uvicorn`: サーバーログの親 Logger。既定は INFO。`uvicorn.error` は親からレベルを継承します。
+- JSON formatter: `service`, `logger_name`, `level`, `timestamp` などを付与します。
+- 出力先: 標準出力。親への伝播を止め、同じログの二重出力を防ぎます。
+- アクセスログ: HTTP ミドルウェアに集約するため、Uvicorn 側は無効化します。
+
+#### モジュール別の設定
+
+特定モジュールだけ DEBUG にする場合は、`app/logging.json` の `loggers` に次の項目を追加します。handler を指定せず、`app` の JSON 出力を利用します。
+
+```json
+"app.request_logging": {"level": "DEBUG"}
+```
+
+- 個別指定がないモジュールは `app` のレベルを継承します。
+- 個別指定は親のレベルより優先されます。親が INFO でも、このモジュールからの DEBUG は出力されます。
+- HTTP ミドルウェアは正常応答を INFO、未処理例外を ERROR で記録します。DEBUG 指定で正常ログの内容が増えるわけではありません。
+- 変更の反映: ローカルではサーバー再起動、Docker・Lambda ではイメージを再ビルドして更新します。
+
+#### 全体レベルの上書き
+
+環境変数 `POWERTOOLS_LOG_LEVEL` は、親 Logger の `app` と `uvicorn` のレベルを上書きします。名前は既存設定を継続して使用します。ファイル内のモジュール別指定値は維持します。
 
 ```sh
 POWERTOOLS_LOG_LEVEL=WARNING docker compose up --no-build
-# Docker を使わず同じ JSON 設定で起動する場合（ポート 8080）
 POWERTOOLS_LOG_LEVEL=DEBUG uv run --locked python -m app.server
 ```
 
-- 既定: `INFO`。
-- 許可値: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`。
-- `WARNING`: 正常リクエストと INFO の起動ログを抑制。ERROR の例外ログは出力。
-- 不正な値: 起動時にエラーにして、設定の誤りを明示。
-- `uvicorn --reload` を直接起動する場合: このサーバー設定を通らず、Uvicorn 自体は標準形式。
+- 許可値: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`。不正な値は起動時にエラーにします。
+- 未指定時: `app/logging.json` の設定を使います。
+- Lambda: `app_log_level` をこの環境変数に渡します。`lambda_application_log_level` は別途、CloudWatch に送るレベルを制限します。
+- 標準 Logger は `AWS_LAMBDA_LOG_LEVEL` でモジュール別設定を上書きしません。ただし、出した DEBUG ログも Lambda 側が INFO なら除外されます。
 
-HTTP の ID 付き JSON と Uvicorn の JSON を標準出力へ集め、共通の環境変数で出力量を切り替えます。設定形式は [Uvicorn の Logging 設定](https://www.uvicorn.org/settings/#logging)を参照してください。
+`app.server` は Uvicorn 起動前に共通設定を適用します。直接 `uvicorn app.main:app` で起動した場合も、アプリの初期化時に適用します。Python の `warnings.warn()` による警告の取り込みは対象外です。
 
 ### モジュールごとのログレベル制御
 

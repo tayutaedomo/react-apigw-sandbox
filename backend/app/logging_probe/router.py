@@ -1,11 +1,9 @@
 """HTTP 呼び出しでモジュール別のログ閾値と JSON 出力を比較する。"""
 
 import logging
-import sys
 from uuid import uuid4
 
 from aws_lambda_powertools import Logger
-from aws_lambda_powertools.logging.formatter import LambdaPowertoolsFormatter
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -17,12 +15,6 @@ LEVELS = get_probe_levels()
 
 # 初期化はプロセスにつき一度。HTTP 呼び出しごとに handler や Logger 状態を変更しない。
 parent = Logger(service=SERVICE, level=LEVELS["powertools_parent"], utc=True, use_rfc3339=True)
-standard_parent = logging.getLogger("app.logging_probe")
-standard_parent.setLevel(logging.INFO)
-standard_parent.propagate = False
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(LambdaPowertoolsFormatter(service=SERVICE, utc=True, use_rfc3339=True))
-standard_parent.addHandler(handler)
 
 TARGETS = (
     ("powertools_parent", parent, LEVELS["powertools_parent"]),
